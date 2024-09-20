@@ -1,4 +1,4 @@
-from app import db  # Import the db instance from app.py
+from db import db
 
 class Website(db.Model):
     id = db.Column(db.Integer, primary_key=True)
