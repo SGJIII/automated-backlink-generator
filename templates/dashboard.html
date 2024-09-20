@@ -3,13 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login</title>
+    <title>Dashboard</title>
     <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
 </head>
 <body>
     <div class="container mt-5">
-        <h1>Welcome to Automated Backlink Generator</h1>
-        <a href="{{ url_for('auth.login') }}" class="btn btn-primary">Login with Google</a>
+        <h1>Dashboard</h1>
+        <p>Welcome, {{ email }}!</p>
+        <a href="{{ url_for('auth.logout') }}" class="btn btn-danger">Logout</a>
     </div>
 </body>
 </html>
