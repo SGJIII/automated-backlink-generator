@@ -1,5 +1,5 @@
 import os
-from flask import Flask, render_template, session, redirect, url_for
+from flask import Flask, render_template, session, redirect, url_for, jsonify
 from flask_migrate import Migrate
 from db import db  # Import db from db.py
 
@@ -40,6 +40,23 @@ def dashboard():
 @app.context_processor
 def inject_google_client_id():
     return {'google_client_id': os.getenv('GOOGLE_CLIENT_ID')}
+
+@app.route('/scrape')
+def start_scraper():
+    if 'email' not in session:
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    from scraper import scrape_websites_for_backlinks
+    with app.app_context():
+        scrape_websites_for_backlinks('crypto currency IRA')
+    return jsonify({"message": "Scraping started!"})
+
+@app.route('/websites')
+def show_websites():
+    if 'email' not in session:
+        return redirect(url_for('auth.login'))
+    websites = Website.query.all()
+    return render_template('websites.html', websites=websites)
 
 if __name__ == '__main__':
     app.run(debug=True)
