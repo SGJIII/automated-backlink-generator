@@ -15,7 +15,8 @@
                     <th>ID</th>
                     <th>URL</th>
                     <th>Domain Authority</th>
-                    <th>Contact Email</th>
+                    <th>Author Name</th>
+                    <th>Author Email</th>
                     <th>Status</th>
                 </tr>
             </thead>
@@ -24,8 +25,9 @@
                 <tr>
                     <td>{{ website.id }}</td>
                     <td>{{ website.url }}</td>
-                    <td>{{ website.domain_authority }}</td>
-                    <td>{{ website.contact_email }}</td>
+                    <td>{{ website.domain_authority if website.domain_authority is not none else 'N/A' }}</td>
+                    <td>{{ website.author_name if website.author_name else 'N/A' }}</td>
+                    <td>{{ website.author_email if website.author_email else 'N/A' }}</td>
                     <td>{{ website.status }}</td>
                 </tr>
                 {% endfor %}

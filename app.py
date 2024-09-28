@@ -2,6 +2,11 @@ import os
 from flask import Flask, render_template, session, redirect, url_for, jsonify
 from flask_migrate import Migrate
 from db import db  # Import db from db.py
+from models import Website, EmailLog, Content
+from auth import auth_bp
+from analyzer import get_domain_authority
+from scraper import scrape_websites_for_backlinks, scrape_author
+import traceback  # Add this import
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -18,11 +23,10 @@ app.secret_key = os.urandom(24)
 db.init_app(app)
 migrate = Migrate(app, db)
 
-# Import models after initializing db and migrate
-from models import Website, EmailLog, Content
+# Import scraper after initializing app
+from scraper import scrape_websites_for_backlinks
 
-# Import the authentication blueprint from auth.py
-from auth import auth_bp
+# Register the authentication blueprint
 app.register_blueprint(auth_bp)
 
 @app.route('/')
@@ -46,7 +50,6 @@ def start_scraper():
     if 'email' not in session:
         return jsonify({"error": "Unauthorized"}), 401
     
-    from scraper import scrape_websites_for_backlinks
     with app.app_context():
         scrape_websites_for_backlinks('crypto currency IRA')
     return jsonify({"message": "Scraping started!"})
@@ -55,7 +58,28 @@ def start_scraper():
 def show_websites():
     if 'email' not in session:
         return redirect(url_for('auth.login'))
+    
     websites = Website.query.all()
+    
+    for website in websites:
+        if website.status == 'pending' or website.author_name is None:
+            website.author_name = scrape_author(website.url)
+            website.status = 'author_found' if website.author_name else 'pending'
+        
+        if website.status == 'author_found' and website.author_email is None:
+            try:
+                domain = website.url.split('//')[1].split('/')[0]
+                website.author_email = find_email(website.author_name, domain)
+                website.status = 'email_found' if website.author_email else 'author_found'
+            except Exception as e:
+                print(f"Error finding email for {website.url}: {str(e)}")
+        
+        if website.domain_authority is None:
+            da, _ = get_domain_authority(website.url)
+            website.domain_authority = da
+    
+    db.session.commit()
+    
     return render_template('websites.html', websites=websites)
 
 if __name__ == '__main__':
