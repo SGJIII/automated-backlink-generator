@@ -3,14 +3,20 @@ import os
 import requests
 import json
 import traceback
+import random  # Add this import
 
 load_dotenv()
 
 # Load Moz API credentials from .env
 MOZ_ACCESS_ID = os.getenv('MOZ_ACCESS_ID')
 MOZ_SECRET_KEY = os.getenv('MOZ_SECRET_KEY')
+USE_MOZ_API = os.getenv('USE_MOZ_API', 'False').lower() == 'true'
 
 def get_domain_authority(url):
+    if not USE_MOZ_API:
+        # Return a random value between 0 and 100 when not using the API
+        return random.randint(0, 100), random.randint(0, 100)
+
     print(f"Entering get_domain_authority for URL: {url}")
     auth = (MOZ_ACCESS_ID, MOZ_SECRET_KEY)
     api_url = "https://lsapi.seomoz.com/v2/url_metrics"

@@ -1,3 +1,4 @@
+from dotenv import load_dotenv
 import os
 from flask import Flask, render_template, session, redirect, url_for, jsonify
 from flask_migrate import Migrate
@@ -5,9 +6,11 @@ from db import db  # Import db from db.py
 from models import Website, EmailLog, Content
 from auth import auth_bp
 from analyzer import get_domain_authority
-from scraper import scrape_websites_for_backlinks, scrape_author
+from scraper import scrape_websites_for_backlinks, scrape_author, scrape_author_text
 import traceback  # Add this import
+from email_finder import find_email  # Add this import
 
+load_dotenv()
 # Initialize Flask app
 app = Flask(__name__)
 
@@ -62,25 +65,56 @@ def show_websites():
     websites = Website.query.all()
     
     for website in websites:
-        if website.status == 'pending' or website.author_name is None:
+        print(f"Processing website: {website.url}")
+        try:
+            print(f"Scraping author for {website.url}")
+            author_text = scrape_author_text(website.url)
+            print(f"Raw author text: {author_text[:500]}...")  # Print first 500 characters
+            website.author_name = scrape_author(website.url)
+            print(f"Scraped and processed author: {website.author_name}")
+            website.status = 'author_found' if website.author_name else 'pending'
+            
+            if website.author_name:
+                domain = website.url.split('//')[1].split('/')[0]
+                website.author_email = find_email(website.author_name, domain)
+                print(f"Found email: {website.author_email}")
+                website.status = 'email_found' if website.author_email else 'author_found'
+            
+            if website.domain_authority is None:
+                da, _ = get_domain_authority(website.url)
+                website.domain_authority = da
+            
+            db.session.commit()  # Commit changes for each website
+        except Exception as e:
+            print(f"Error processing website {website.url}: {str(e)}")
+            traceback.print_exc()
+    
+    return render_template('websites.html', websites=websites)
+
+@app.route('/reprocess_authors')
+def reprocess_authors():
+    if 'email' not in session:
+        return redirect(url_for('auth.login'))
+    
+    websites = Website.query.all()
+    
+    for website in websites:
+        try:
+            author_text = scrape_author_text(website.url)
             website.author_name = scrape_author(website.url)
             website.status = 'author_found' if website.author_name else 'pending'
-        
-        if website.status == 'author_found' and website.author_email is None:
-            try:
+            
+            if website.author_name:
                 domain = website.url.split('//')[1].split('/')[0]
                 website.author_email = find_email(website.author_name, domain)
                 website.status = 'email_found' if website.author_email else 'author_found'
-            except Exception as e:
-                print(f"Error finding email for {website.url}: {str(e)}")
-        
-        if website.domain_authority is None:
-            da, _ = get_domain_authority(website.url)
-            website.domain_authority = da
+        except Exception as e:
+            print(f"Error reprocessing website {website.url}: {str(e)}")
+            traceback.print_exc()
     
     db.session.commit()
     
-    return render_template('websites.html', websites=websites)
+    return redirect(url_for('show_websites'))
 
 if __name__ == '__main__':
     app.run(debug=True)

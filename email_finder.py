@@ -1,13 +1,30 @@
 import requests
 import os
+import re
+from pyhunter import PyHunter
 
-def find_email(author_name, domain):
-    if not author_name:
+hunter = PyHunter(os.getenv("HUNTER_API_KEY"))
+
+def find_email(author_names, domain):
+    if not author_names:
         return None
-    # This is a placeholder. You'll need to implement an actual email finding logic
-    # You might want to use a service like Hunter.io or implement your own algorithm
-    # For now, we'll just return a dummy email
-    return f"{author_name.lower().replace(' ', '.')}@{domain}"
+    
+    authors = [name.strip() for name in author_names.split(',')]
+    emails = []
+    
+    for author in authors:
+        try:
+            result = hunter.domain_search(domain, full_name=author)
+            if result and 'emails' in result and result['emails']:
+                emails.append(result['emails'][0]['value'])
+            else:
+                # If no specific email found, use pattern
+                emails.append(f"{author.lower().replace(' ', '.')}@{domain}")
+        except Exception as e:
+            print(f"Error finding email for {author} at {domain}: {str(e)}")
+            emails.append(f"{author.lower().replace(' ', '.')}@{domain}")
+    
+    return ', '.join(emails)
 
 def process_email_finding():
     websites = Website.query.filter_by(status='author_found').all()
