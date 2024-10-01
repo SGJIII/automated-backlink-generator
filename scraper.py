@@ -12,6 +12,7 @@ import traceback
 from openai import OpenAI
 import PyPDF2
 import io
+from email_finder import find_email  # Add this import at the top of the file
 
 
 load_dotenv()
@@ -131,13 +132,13 @@ def scrape_websites_for_backlinks(keyword):
         website = Website.query.filter_by(url=website_url).first()
         if not website:
             author_name = scrape_author(website_url)
-            author_email = extract_contact_info(website_url)
+            author_email = find_email(author_name, website_url) if author_name else None
             new_website = Website(
                 url=website_url,
                 domain_authority=None,
                 author_name=author_name,
                 author_email=author_email,
-                status='author_found' if author_name else 'pending'
+                status='email_found' if author_email else ('author_found' if author_name else 'pending')
             )
             db.session.add(new_website)
     db.session.commit()

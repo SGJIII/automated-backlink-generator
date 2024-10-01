@@ -8,7 +8,7 @@ from auth import auth_bp
 from analyzer import get_domain_authority
 from scraper import scrape_websites_for_backlinks, scrape_author, scrape_author_text
 import traceback  # Add this import
-from email_finder import find_email  # Add this import
+from email_finder import find_email, process_email_finding  # Add this import
 
 load_dotenv()
 # Initialize Flask app
@@ -65,7 +65,6 @@ def show_websites():
     websites = Website.query.all()
     
     for website in websites:
-        print(f"Processing website: {website.url}")
         try:
             print(f"Scraping author for {website.url}")
             author_text = scrape_author_text(website.url)
@@ -76,7 +75,7 @@ def show_websites():
             
             if website.author_name:
                 domain = website.url.split('//')[1].split('/')[0]
-                website.author_email = find_email(website.author_name, domain)
+                website.author_email = find_email(website.author_name, website.url)
                 print(f"Found email: {website.author_email}")
                 website.status = 'email_found' if website.author_email else 'author_found'
             
@@ -84,10 +83,12 @@ def show_websites():
                 da, _ = get_domain_authority(website.url)
                 website.domain_authority = da
             
-            db.session.commit()  # Commit changes for each website
+            db.session.add(website)  # Ensure the website is added to the session
         except Exception as e:
             print(f"Error processing website {website.url}: {str(e)}")
             traceback.print_exc()
+    
+    db.session.commit()  # Commit all changes at once
     
     return render_template('websites.html', websites=websites)
 
@@ -103,16 +104,14 @@ def reprocess_authors():
             author_text = scrape_author_text(website.url)
             website.author_name = scrape_author(website.url)
             website.status = 'author_found' if website.author_name else 'pending'
-            
-            if website.author_name:
-                domain = website.url.split('//')[1].split('/')[0]
-                website.author_email = find_email(website.author_name, domain)
-                website.status = 'email_found' if website.author_email else 'author_found'
         except Exception as e:
             print(f"Error reprocessing website {website.url}: {str(e)}")
             traceback.print_exc()
     
     db.session.commit()
+    
+    # Process email finding after scraping authors
+    process_email_finding()
     
     return redirect(url_for('show_websites'))
 
