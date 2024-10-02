@@ -52,6 +52,7 @@ def callback():
         GOOGLE_CLIENT_ID
     )
     session['email'] = id_info.get('email')
+    print("Session set in callback:", session)  # Debug print
     return redirect(url_for('dashboard'))
 
 @auth_bp.route('/logout')

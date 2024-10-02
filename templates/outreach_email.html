@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Outreach Email</title>
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container mt-5">
+        <h1>Outreach Email for {{ website.url }}</h1>
+        <form action="{{ url_for('approve_outreach', website_id=website.id) }}" method="post">
+            <div class="form-group">
+                <label for="email_content">Email Content:</label>
+                <textarea class="form-control" id="email_content" name="email_content" rows="10">{{ email_content }}</textarea>
+            </div>
+            <div class="form-check">
+                <input type="checkbox" class="form-check-input" id="automated_followup" name="automated_followup">
+                <label class="form-check-label" for="automated_followup">Enable Automated Follow-up</label>
+            </div>
+            <div class="form-check">
+                <input type="checkbox" class="form-check-input" id="automated_reply" name="automated_reply">
+                <label class="form-check-label" for="automated_reply">Enable Automated Reply</label>
+            </div>
+            <button type="submit" class="btn btn-primary mt-3">Approve and Send</button>
+        </form>
+    </div>
+</body>
+</html>

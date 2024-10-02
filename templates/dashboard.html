@@ -10,6 +10,33 @@
     <div class="container mt-5">
         <h1>Dashboard</h1>
         <p>Welcome, {{ email }}!</p>
+        <h2>Outreach Status</h2>
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Website</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for website in websites %}
+                <tr>
+                    <td>{{ website.url }}</td>
+                    <td>{{ website.status }}</td>
+                    <td>
+                        {% if website.status in ['outreach_started', 'outreach_paused'] %}
+                            {% if website.status == 'outreach_started' %}
+                                <a href="{{ url_for('pause_outreach', website_id=website.id) }}" class="btn btn-warning btn-sm">Pause Outreach</a>
+                            {% else %}
+                                <a href="{{ url_for('resume_outreach', website_id=website.id) }}" class="btn btn-success btn-sm">Resume Outreach</a>
+                            {% endif %}
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
         <a href="{{ url_for('auth.logout') }}" class="btn btn-danger">Logout</a>
     </div>
 </body>

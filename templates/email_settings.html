@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email Settings</title>
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+    <div class="container mt-5">
+        <h1>Email Settings</h1>
+        <form method="POST">
+            <div class="form-group">
+                <label for="email_provider">Email Provider</label>
+                <select class="form-control" id="email_provider" name="email_provider">
+                    <option value="mailgun" {% if user.email_provider == 'mailgun' %}selected{% endif %}>Mailgun</option>
+                    <option value="smtp" {% if user.email_provider == 'smtp' %}selected{% endif %}>SMTP (General)</option>
+                    <option value="gmail" {% if user.email_provider == 'gmail' %}selected{% endif %}>Gmail</option>
+                </select>
+            </div>
+            
+            <div id="mailgun_settings" {% if user.email_provider != 'mailgun' %}style="display:none;"{% endif %}>
+                <div class="form-group">
+                    <label for="mailgun_api_key">Mailgun API Key</label>
+                    <input type="text" class="form-control" id="mailgun_api_key" name="mailgun_api_key" value="{{ user.email_settings.get('api_key', '') }}">
+                </div>
+                <div class="form-group">
+                    <label for="mailgun_domain">Mailgun Domain</label>
+                    <input type="text" class="form-control" id="mailgun_domain" name="mailgun_domain" value="{{ user.email_settings.get('domain', '') }}">
+                </div>
+            </div>
+            
+            <div id="smtp_settings" {% if user.email_provider not in ['smtp', 'gmail'] %}style="display:none;"{% endif %}>
+                <div class="form-group">
+                    <label for="smtp_server">SMTP Server</label>
+                    <input type="text" class="form-control" id="smtp_server" name="smtp_server" value="{{ user.email_settings.get('smtp_server', '') }}">
+                </div>
+                <div class="form-group">
+                    <label for="smtp_port">SMTP Port</label>
+                    <input type="number" class="form-control" id="smtp_port" name="smtp_port" value="{{ user.email_settings.get('smtp_port', '') }}">
+                </div>
+                <div class="form-group">
+                    <label for="smtp_username">SMTP Username (Email Address)</label>
+                    <input type="text" class="form-control" id="smtp_username" name="smtp_username" value="{{ user.email_settings.get('smtp_username', '') }}">
+                </div>
+                <div class="form-group">
+                    <label for="smtp_password">SMTP Password (or App Password)</label>
+                    <input type="password" class="form-control" id="smtp_password" name="smtp_password">
+                </div>
+            </div>
+            
+            <button type="submit" class="btn btn-primary">Save Settings</button>
+        </form>
+    </div>
+    
+    <script>
+        document.getElementById('email_provider').addEventListener('change', function() {
+            if (this.value === 'mailgun') {
+                document.getElementById('mailgun_settings').style.display = 'block';
+                document.getElementById('smtp_settings').style.display = 'none';
+            } else if (this.value === 'smtp' || this.value === 'gmail') {
+                document.getElementById('mailgun_settings').style.display = 'none';
+                document.getElementById('smtp_settings').style.display = 'block';
+                
+                if (this.value === 'gmail') {
+                    document.getElementById('smtp_server').value = 'smtp.gmail.com';
+                    document.getElementById('smtp_port').value = '587';
+                    // Optionally pre-fill the username if you have the user's email stored
+                    // document.getElementById('smtp_username').value = '{{ user.email }}';
+                } else {
+                    document.getElementById('smtp_server').value = '';
+                    document.getElementById('smtp_port').value = '';
+                }
+            }
+        });
+    </script>
+</body>
+</html>

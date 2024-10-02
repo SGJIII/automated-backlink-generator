@@ -70,7 +70,12 @@ def verify_email(email):
         print(f"Error verifying email {email}: {str(e)}")
         return {}
 
-def process_email_finding():
+def process_email_finding(user_id):
+    user = User.query.get(user_id)
+    if not user:
+        print(f"User with id {user_id} not found")
+        return
+
     websites = Website.query.filter_by(status='author_found').all()
     for website in websites:
         try:
@@ -86,8 +91,12 @@ def process_email_finding():
             if valid_emails:
                 website.author_email = ', '.join(valid_emails)
                 website.status = 'email_found'
+                # Send a notification email to the user
+                send_email(user.id, user.email, "Email Found", f"Email found for {website.url}: {website.author_email}")
             else:
                 website.status = 'email_not_found'
+                # Send a notification email to the user
+                send_email(user.id, user.email, "Email Not Found", f"Could not find email for {website.url}")
 
         except Exception as e:
             print(f"Error processing website {website.url}: {str(e)}")
