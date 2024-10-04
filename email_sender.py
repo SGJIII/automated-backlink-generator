@@ -7,6 +7,10 @@ def send_email(user_id, to_email, subject, body):
         print(f"User with id {user_id} not found")
         return False
 
+    if not user.email_provider:
+        print(f"Email provider not set for user {user_id}")
+        return False
+
     if user.email_provider == 'mailgun':
         return send_via_mailgun(
             from_email=user.email,

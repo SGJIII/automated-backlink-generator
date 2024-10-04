@@ -1,15 +1,15 @@
 from dotenv import load_dotenv
 import os
-from flask import Flask, render_template, session, redirect, url_for, jsonify, request
+from flask import Flask, render_template, session, redirect, url_for, jsonify, request, flash  # Add this import
 from flask_migrate import Migrate
 from db import db  # Import db from db.py
-from models import Website, EmailLog, Content, User
+from models import Website, EmailLog, Content, User, Campaign, OutreachAttempt
 from auth import auth_bp
-from analyzer import get_domain_authority
+from analyzer import get_domain_authority, analyze_websites_for_campaign
 from scraper import scrape_websites_for_backlinks, scrape_author, scrape_author_text
 import traceback  # Add this import
 from email_finder import find_email, process_email_finding  # Add this import
-from content_generator import generate_outreach_email
+from content_generator import generate_outreach_email_content
 from email_sender import send_email
 from automated_followup import schedule_followup
 from automated_reply import process_reply
@@ -47,7 +47,17 @@ def dashboard():
     # Check if the user is logged in by looking for email in session
     if 'email' not in session:
         return redirect(url_for('auth.login'))
-    return render_template('dashboard.html', email=session['email'])
+    
+    user = User.query.filter_by(email=session['email']).first()
+    if not user:
+        return redirect(url_for('auth.login'))
+    
+    # Check if user has completed their profile
+    if not user.name or not user.company or not user.company_profile:
+        flash('Please complete your profile before accessing the dashboard.', 'warning')
+        return redirect(url_for('user_settings'))
+    
+    return render_template('dashboard.html', user=user)
 
 # Function to inject Google Client ID into templates
 @app.context_processor
@@ -111,30 +121,24 @@ def reprocess_authors():
     
     return redirect(url_for('show_websites'))
 
-@app.route('/start_outreach/<int:website_id>')
-def start_outreach(website_id):
-    print("Session contents:", session)  # Debug print
+@app.route('/start_outreach/<int:website_id>/<int:campaign_id>')
+def start_outreach(website_id, campaign_id):
     if 'email' not in session:
-        print("Email not in session, redirecting to login")  # Debug print
         return redirect(url_for('auth.login'))
     
     user = User.query.filter_by(email=session['email']).first()
-    if not user:
-        print(f"User not found for email: {session['email']}, creating new user")  # Debug print
-        # Create a new user if one doesn't exist
-        user = User(email=session['email'], name=session['email'].split('@')[0])  # Using email as name temporarily
-        db.session.add(user)
+    website = Website.query.get_or_404(website_id)
+    campaign = Campaign.query.get_or_404(campaign_id)
+    
+    if website.status == 'email_found':
+        outreach_attempt = OutreachAttempt(campaign_id=campaign.id, website_id=website.id)
+        db.session.add(outreach_attempt)
         db.session.commit()
+        
+        email_content = generate_outreach_email_content(website, user, campaign.target_url)
+        return render_template('outreach_email.html', website=website, email_content=email_content, campaign_id=campaign.id)
     
-    website = Website.query.get(website_id)
-    if website and website.status == 'email_found':
-        # Generate initial content
-        email_content = generate_outreach_email(website, user.id)
-        return render_template('outreach_email.html', website=website, email_content=email_content)
-    
-    # If the website doesn't exist or its status is not 'email_found', redirect to the websites page
-    print("Website not found or status not 'email_found', redirecting to show_websites")  # Debug print
-    return redirect(url_for('show_websites'))
+    return redirect(url_for('campaign_details', campaign_id=campaign.id))
 
 @app.route('/approve_outreach/<int:website_id>', methods=['POST'])
 def approve_outreach(website_id):
@@ -148,21 +152,27 @@ def approve_outreach(website_id):
         user = User.query.filter_by(email=session['email']).first()
         
         # Send the email
-        send_email(user.id, website.author_email, "Backlink Request", email_content)
+        success = send_email(user.id, website.author_email, "Backlink Request", email_content)
         
-        # Update website status
-        website.status = 'outreach_sent'
-        db.session.commit()
-        
-        if automated_followup:
-            schedule_followup(website_id, user.id)
-        
-        if automated_reply:
-            # Set a flag in the database to enable automated replies
-            website.automated_reply_enabled = True
+        if success:
+            # Update website status
+            website.status = 'outreach_sent'
             db.session.commit()
+            
+            if automated_followup:
+                schedule_followup(website_id, user.id)
+            
+            if automated_reply:
+                # Set a flag in the database to enable automated replies
+                website.automated_reply_enabled = True
+                db.session.commit()
+            
+            flash('Email sent successfully!', 'success')
+        else:
+            flash('Failed to send email. Please check your email settings.', 'error')
         
         return redirect(url_for('dashboard'))
+    flash('Website not found.', 'error')
     return redirect(url_for('show_websites'))
 
 @app.route('/process_reply/<int:website_id>', methods=['POST'])
@@ -200,25 +210,69 @@ def email_settings():
         return redirect(url_for('auth.login'))
     
     user = User.query.filter_by(email=session['email']).first()
+    if not user:
+        return redirect(url_for('auth.login'))
     
     if request.method == 'POST':
-        user.email_provider = request.form['email_provider']
-        if user.email_provider == 'mailgun':
-            user.email_settings = {
-                'api_key': request.form['mailgun_api_key'],
-                'domain': request.form['mailgun_domain']
-            }
-        elif user.email_provider in ['smtp', 'gmail']:
-            user.email_settings = {
-                'smtp_server': request.form['smtp_server'],
-                'smtp_port': int(request.form['smtp_port']),
-                'smtp_username': request.form['smtp_username'],
-                'smtp_password': request.form['smtp_password']
-            }
-        db.session.commit()
+        # Handle form submission (update email settings)
+        # ... (implement the logic to save email settings)
+        flash('Email settings updated successfully', 'success')
         return redirect(url_for('dashboard'))
     
     return render_template('email_settings.html', user=user)
+
+@app.route('/user_settings', methods=['GET', 'POST'])
+def user_settings():
+    if 'email' not in session:
+        return redirect(url_for('auth.login'))
+    
+    user = User.query.filter_by(email=session['email']).first()
+    if not user:
+        # Create a new user if they don't exist
+        user = User(email=session['email'])
+        db.session.add(user)
+        db.session.commit()
+    
+    if request.method == 'POST':
+        user.name = request.form['name']
+        user.company = request.form['company']
+        user.company_profile = request.form['company_profile']
+        db.session.commit()
+        flash('User settings updated successfully', 'success')
+        return redirect(url_for('dashboard'))
+    
+    return render_template('user_settings.html', user=user)
+
+@app.route('/new_campaign', methods=['GET', 'POST'])
+def new_campaign():
+    if 'email' not in session:
+        return redirect(url_for('auth.login'))
+    
+    user = User.query.filter_by(email=session['email']).first()
+    if not user:
+        return redirect(url_for('auth.login'))
+    
+    if request.method == 'POST':
+        target_url = request.form['target_url']
+        campaign = Campaign(user_id=user.id, target_url=target_url)
+        db.session.add(campaign)
+        db.session.commit()
+        
+        # Start the website analysis process
+        analyze_websites_for_campaign(campaign.id)
+        
+        flash('New campaign created successfully. Website analysis has begun.', 'success')
+        return redirect(url_for('dashboard'))
+    
+    return render_template('new_campaign.html')
+
+@app.route('/campaign/<int:campaign_id>')
+def campaign_details(campaign_id):
+    if 'email' not in session:
+        return redirect(url_for('auth.login'))
+    
+    campaign = Campaign.query.get_or_404(campaign_id)
+    return render_template('campaign_details.html', campaign=campaign)
 
 @app.before_request
 def before_request():

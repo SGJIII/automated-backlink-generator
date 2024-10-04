@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+
+{% block title %}User Settings{% endblock %}
+
+{% block content %}
+<h1>User Settings</h1>
+<form method="POST">
+    <div class="form-group">
+        <label for="name">Your Name</label>
+        <input type="text" class="form-control" id="name" name="name" value="{{ user.name }}" required>
+    </div>
+    <div class="form-group">
+        <label for="company">Company Name</label>
+        <input type="text" class="form-control" id="company" name="company" value="{{ user.company }}" required>
+    </div>
+    <div class="form-group">
+        <label for="company_profile">Company Profile</label>
+        <textarea class="form-control" id="company_profile" name="company_profile" rows="3" required>{{ user.company_profile }}</textarea>
+    </div>
+    <button type="submit" class="btn btn-primary">Save Settings</button>
+</form>
+{% endblock %}

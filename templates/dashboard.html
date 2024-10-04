@@ -1,43 +1,53 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard</title>
-    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
-</head>
-<body>
-    <div class="container mt-5">
-        <h1>Dashboard</h1>
-        <p>Welcome, {{ email }}!</p>
-        <h2>Outreach Status</h2>
-        <table class="table">
-            <thead>
-                <tr>
-                    <th>Website</th>
-                    <th>Status</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for website in websites %}
-                <tr>
-                    <td>{{ website.url }}</td>
-                    <td>{{ website.status }}</td>
-                    <td>
-                        {% if website.status in ['outreach_started', 'outreach_paused'] %}
-                            {% if website.status == 'outreach_started' %}
-                                <a href="{{ url_for('pause_outreach', website_id=website.id) }}" class="btn btn-warning btn-sm">Pause Outreach</a>
-                            {% else %}
-                                <a href="{{ url_for('resume_outreach', website_id=website.id) }}" class="btn btn-success btn-sm">Resume Outreach</a>
+{% extends "base.html" %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<h1>Welcome, {{ user.name }}!</h1>
+<p>Company: {{ user.company }}</p>
+
+<h2>Your Campaigns</h2>
+{% if user.campaigns %}
+    {% for campaign in user.campaigns %}
+        <h3>Campaign: {{ campaign.target_url }}</h3>
+        <p>Status: {{ campaign.status }}</p>
+        <p>Created: {{ campaign.created_date }}</p>
+        
+        <h4>Outreach Attempts</h4>
+        {% if campaign.websites %}
+            <table class="table table-bordered">
+                <thead>
+                    <tr>
+                        <th>Website</th>
+                        <th>Status</th>
+                        <th>Author</th>
+                        <th>Email</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for website in campaign.websites %}
+                    <tr>
+                        <td>{{ website.url }}</td>
+                        <td>{{ website.status }}</td>
+                        <td>{{ website.author_name }}</td>
+                        <td>{{ website.author_email }}</td>
+                        <td>
+                            {% if website.status == 'email_found' %}
+                                <a href="{{ url_for('start_outreach', website_id=website.id, campaign_id=campaign.id) }}" class="btn btn-primary btn-sm">Start Outreach</a>
                             {% endif %}
-                        {% endif %}
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        <a href="{{ url_for('auth.logout') }}" class="btn btn-danger">Logout</a>
-    </div>
-</body>
-</html>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <p>No outreach attempts yet. Website analysis may still be in progress.</p>
+        {% endif %}
+    {% endfor %}
+{% else %}
+    <p>You haven't created any campaigns yet. Click "Start New Campaign" to begin!</p>
+{% endif %}
+
+<a href="{{ url_for('new_campaign') }}" class="btn btn-success mt-3">Start New Campaign</a>
+{% endblock %}

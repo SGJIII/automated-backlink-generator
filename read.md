@@ -746,3 +746,12 @@ Thank you for considering my proposal. I look forward to the possibility of work
 
 Best regards,
 Samueljoh
+
+Email Needs: 
+- Name (input)
+- Company (input)
+- Company profile (input)
+- URL of article trying to get backlinks for (input)
+- Don't actually mention the word backlink instead say something like "I think your readers might find this article or product helpful or interesting."
+- Only use first names when addressing the people on the email
+- Should probably send separate email to each person rather than one email to both people.

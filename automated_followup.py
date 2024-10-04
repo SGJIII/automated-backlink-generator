@@ -1,7 +1,7 @@
 from apscheduler.schedulers.background import BackgroundScheduler
 from datetime import datetime, timedelta
 from models import Website, EmailLog, User, db
-from content_generator import generate_followup_email
+from content_generator import generate_outreach_email_content  # Change this line
 from email_sender import send_email
 
 scheduler = BackgroundScheduler()
@@ -9,9 +9,16 @@ scheduler.start()
 
 def schedule_followup(website_id, user_id):
     website = Website.query.get(website_id)
-    if website and website.status == 'outreach_started':
-        next_followup = datetime.now() + timedelta(days=3.5)
-        scheduler.add_job(send_followup, 'date', run_date=next_followup, args=[website_id, user_id])
+    if website:
+        # Generate follow-up content
+        followup_content = generate_outreach_email_content(website, user_id, is_followup=True)  # Update this line
+        # Send follow-up email
+        success = send_email(user_id, website.author_email, "Follow-up: Backlink Request", followup_content)
+        if success:
+            # Log the follow-up email
+            email_log = EmailLog(website_id=website_id, email_type='followup', content=followup_content)
+            db.session.add(email_log)
+            db.session.commit()
 
 def send_followup(website_id, user_id):
     website = Website.query.get(website_id)

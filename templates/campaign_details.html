@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block title %}Campaign Details{% endblock %}
+
+{% block content %}
+<h1>Campaign Details</h1>
+<h2>Target URL: {{ campaign.target_url }}</h2>
+<p>Status: {{ campaign.status }}</p>
+<p>Created: {{ campaign.created_date }}</p>
+
+<h3>Outreach Attempts</h3>
+<table class="table table-bordered">
+    <thead>
+        <tr>
+            <th>Website</th>
+            <th>Status</th>
+            <th>Last Contact Date</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for attempt in campaign.outreach_attempts %}
+        <tr>
+            <td>{{ attempt.website.url }}</td>
+            <td>{{ attempt.status }}</td>
+            <td>{{ attempt.last_contact_date }}</td>
+            <td>
+                {% if attempt.status == 'pending' %}
+                    <a href="{{ url_for('start_outreach', website_id=attempt.website.id, campaign_id=campaign.id) }}" class="btn btn-primary btn-sm">Start Outreach</a>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endblock %}
