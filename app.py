@@ -14,6 +14,7 @@ from email_sender import send_email
 from automated_followup import schedule_followup
 from automated_reply import process_reply
 from flask_session import Session
+from sqlalchemy import func
 
 load_dotenv()
 # Initialize Flask app
@@ -73,15 +74,15 @@ def start_scraper():
         scrape_websites_for_backlinks('crypto currency IRA')
     return jsonify({"message": "Scraping started!"})
 
-@app.route('/websites')
-def show_websites():
+@app.route('/campaign/<int:campaign_id>/websites')
+def show_websites(campaign_id):
     if 'email' not in session:
-        return redirect(url_for('auth.login'))
+        return redirect(url_for('login'))
     
-    # Fetch all websites from the database
-    websites = Website.query.all()
+    campaign = Campaign.query.get_or_404(campaign_id)
+    websites = Website.query.filter(Website.campaigns.any(id=campaign_id)).all()
     
-    return render_template('websites.html', websites=websites)
+    return render_template('campaign_websites.html', campaign=campaign, websites=websites)
 
 # Add a new route for manually triggering the scraper
 @app.route('/scrape_websites')
@@ -140,8 +141,8 @@ def start_outreach(website_id, campaign_id):
     
     return redirect(url_for('campaign_details', campaign_id=campaign.id))
 
-@app.route('/approve_outreach/<int:website_id>', methods=['POST'])
-def approve_outreach(website_id):
+@app.route('/approve_general_outreach/<int:website_id>', methods=['POST'])
+def approve_general_outreach(website_id):
     website = Website.query.get(website_id)
     if website:
         email_content = request.form['email_content']
@@ -254,17 +255,129 @@ def new_campaign():
     
     if request.method == 'POST':
         target_url = request.form['target_url']
-        campaign = Campaign(user_id=user.id, target_url=target_url)
+        keyword = request.form['keyword']
+        name = request.form['name']
+        campaign = Campaign(user_id=user.id, target_url=target_url, keyword=keyword, name=name)
         db.session.add(campaign)
         db.session.commit()
         
-        # Start the website analysis process
-        analyze_websites_for_campaign(campaign.id)
-        
-        flash('New campaign created successfully. Website analysis has begun.', 'success')
-        return redirect(url_for('dashboard'))
+        return redirect(url_for('campaign_websites', campaign_id=campaign.id))
     
     return render_template('new_campaign.html')
+
+@app.route('/campaign/<int:campaign_id>/websites')
+def view_campaign_websites(campaign_id):
+    campaign = Campaign.query.get_or_404(campaign_id)
+    return render_template('campaign_websites.html', campaign=campaign)
+
+@app.route('/campaign/<int:campaign_id>/analyze', methods=['POST'])
+def analyze_campaign(campaign_id):
+    campaign = Campaign.query.get_or_404(campaign_id)
+    try:
+        analyze_websites_for_campaign(campaign.id)
+        return jsonify({'success': True, 'message': 'Analysis started successfully'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)})
+
+@app.route('/campaign/<int:campaign_id>/fetch_more', methods=['POST'])
+def fetch_more_websites(campaign_id):
+    campaign = Campaign.query.get_or_404(campaign_id)
+    try:
+        new_websites = analyze_websites_for_campaign(campaign.id, fetch_more=True)
+        return jsonify({'success': True, 'websites': new_websites})
+    except Exception as e:
+        return jsonify({'success': False, 'message': str(e)})
+
+@app.route('/campaign/<int:campaign_id>/begin_outreach/<int:website_id>', methods=['GET', 'POST'])
+def begin_outreach(campaign_id, website_id):
+    campaign = Campaign.query.get_or_404(campaign_id)
+    website = Website.query.get_or_404(website_id)
+    email_content = generate_outreach_email_content(website, campaign.user_id, campaign.user.name, campaign.user.company, campaign.user.company_profile, campaign.target_url)
+    return render_template('outreach_email.html', campaign=campaign, website=website, email_content=email_content)
+
+@app.route('/campaign/<int:campaign_id>/approve_outreach/<int:website_id>', methods=['POST'])
+def approve_campaign_outreach(campaign_id, website_id):
+    campaign = Campaign.query.get_or_404(campaign_id)
+    website = Website.query.get_or_404(website_id)
+    email_content = request.form['email_content']
+    automated_followup = 'automated_followup' in request.form
+    automated_reply = 'automated_reply' in request.form
+    
+    # Send email
+    success = send_email(campaign.user_id, website.author_email, "Outreach Email", email_content)
+    
+    if success:
+        outreach_attempt = OutreachAttempt(
+            campaign_id=campaign.id, 
+            website_id=website.id, 
+            status='sent',
+            automated_followup=automated_followup,
+            automated_reply=automated_reply
+        )
+        db.session.add(outreach_attempt)
+        website.status = 'outreach_sent'
+        if automated_followup:
+            schedule_followup(website.id, campaign.user_id)
+        db.session.commit()
+        flash('Outreach email sent successfully', 'success')
+    else:
+        flash('Failed to send outreach email', 'error')
+    
+    return redirect(url_for('campaign_details', campaign_id=campaign.id))
+
+@app.route('/campaign/<int:campaign_id>')
+def view_campaign_details(campaign_id):
+    if 'email' not in session:
+        return redirect(url_for('auth.login'))
+    
+    campaign = Campaign.query.get_or_404(campaign_id)
+    
+    # Count active sequences
+    active_sequences_count = OutreachAttempt.query.filter_by(campaign_id=campaign_id, status='active').count()
+    
+    # Count total websites
+    total_websites_count = Website.query.filter(Website.campaigns.any(id=campaign_id)).count()
+    
+    # Count websites with successful outreach
+    successful_outreach_count = Website.query.filter(Website.campaigns.any(id=campaign_id), Website.status == 'outreach_sent').count()
+    
+    return render_template('campaign_details.html', 
+                           campaign=campaign,
+                           active_sequences_count=active_sequences_count,
+                           total_websites_count=total_websites_count,
+                           successful_outreach_count=successful_outreach_count)
+
+@app.route('/campaign/<int:campaign_id>/delete', methods=['POST'])
+def delete_campaign(campaign_id):
+    campaign = Campaign.query.get_or_404(campaign_id)
+    db.session.delete(campaign)
+    db.session.commit()
+    flash('Campaign deleted successfully', 'success')
+    return redirect(url_for('dashboard'))
+
+@app.route('/campaign/<int:campaign_id>/pause', methods=['POST'])
+def pause_campaign(campaign_id):
+    campaign = Campaign.query.get_or_404(campaign_id)
+    campaign.status = 'paused'
+    db.session.commit()
+    flash('Campaign paused successfully', 'success')
+    return redirect(url_for('campaign_details', campaign_id=campaign.id))
+
+@app.route('/campaign/<int:campaign_id>/resume', methods=['POST'])
+def resume_campaign(campaign_id):
+    campaign = Campaign.query.get_or_404(campaign_id)
+    campaign.status = 'active'
+    db.session.commit()
+    flash('Campaign resumed successfully', 'success')
+    return redirect(url_for('campaign_details', campaign_id=campaign.id))
+
+@app.route('/campaigns')
+def show_campaigns():
+    if 'email' not in session:
+        return redirect(url_for('auth.login'))
+    
+    campaigns = Campaign.query.all()
+    return render_template('campaigns.html', campaigns=campaigns)
 
 @app.route('/campaign/<int:campaign_id>')
 def campaign_details(campaign_id):
@@ -273,6 +386,53 @@ def campaign_details(campaign_id):
     
     campaign = Campaign.query.get_or_404(campaign_id)
     return render_template('campaign_details.html', campaign=campaign)
+
+@app.route('/campaign/<int:campaign_id>/websites')
+def campaign_websites(campaign_id):
+    if 'email' not in session:
+        return redirect(url_for('auth.login'))
+    
+    campaign = Campaign.query.get_or_404(campaign_id)
+    websites = Website.query.filter(Website.campaigns.any(id=campaign_id)).all()
+    return render_template('campaign_websites.html', campaign=campaign, websites=websites)
+
+@app.route('/campaign/<int:campaign_id>/outreach')
+def campaign_outreach(campaign_id):
+    if 'email' not in session:
+        return redirect(url_for('auth.login'))
+    
+    campaign = Campaign.query.get_or_404(campaign_id)
+    outreach_attempts = OutreachAttempt.query.join(Website).filter(Website.campaigns.any(id=campaign_id)).all()
+    return render_template('campaign_outreach.html', campaign=campaign, outreach_attempts=outreach_attempts)
+
+@app.route('/campaign/<int:campaign_id>/sequences')
+def campaign_sequences(campaign_id):
+    campaign = Campaign.query.get_or_404(campaign_id)
+    outreach_attempts = OutreachAttempt.query.filter_by(campaign_id=campaign_id).all()
+    return render_template('campaign_sequences.html', campaign=campaign, sequences=outreach_attempts)
+
+@app.route('/sequence/<int:sequence_id>/<action>', methods=['POST'])
+def update_sequence_status(sequence_id, action):
+    sequence = OutreachAttempt.query.get_or_404(sequence_id)
+    if action == 'pause':
+        sequence.status = 'paused'
+    elif action == 'resume':
+        sequence.status = 'active'
+    db.session.commit()
+    return jsonify({'success': True})
+
+@app.route('/sequence/<int:sequence_id>/edit')
+def edit_sequence(sequence_id):
+    sequence = OutreachAttempt.query.get_or_404(sequence_id)
+    return render_template('edit_sequence.html', sequence=sequence)
+
+@app.route('/sequence/<int:sequence_id>/update', methods=['POST'])
+def update_sequence(sequence_id):
+    sequence = OutreachAttempt.query.get_or_404(sequence_id)
+    sequence.automated_followup = 'automated_followup' in request.form
+    sequence.automated_reply = 'automated_reply' in request.form
+    db.session.commit()
+    return redirect(url_for('campaign_sequences', campaign_id=sequence.campaign_id))
 
 @app.before_request
 def before_request():

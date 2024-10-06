@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Sequence: {{ sequence.website.url }}{% endblock %}
+
+{% block content %}
+<h1>Edit Outreach Sequence</h1>
+<h2>Website: {{ sequence.website.url }}</h2>
+<h3>Author: {{ sequence.website.author_name }}</h3>
+
+<form action="{{ url_for('update_sequence', sequence_id=sequence.id) }}" method="post">
+    <div class="form-check mb-3">
+        <input type="checkbox" class="form-check-input" id="automated_followup" name="automated_followup" {% if sequence.automated_followup %}checked{% endif %}>
+        <label class="form-check-label" for="automated_followup">Enable Automated Follow-up</label>
+    </div>
+    <div class="form-check mb-3">
+        <input type="checkbox" class="form-check-input" id="automated_reply" name="automated_reply" {% if sequence.automated_reply %}checked{% endif %}>
+        <label class="form-check-label" for="automated_reply">Enable Automated Reply</label>
+    </div>
+    <button type="submit" class="btn btn-primary">Update Sequence</button>
+</form>
+
+<a href="{{ url_for('campaign_sequences', campaign_id=sequence.campaign_id) }}" class="btn btn-secondary mt-3">Back to Sequences</a>
+{% endblock %}

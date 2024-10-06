@@ -4,7 +4,7 @@
 
 {% block content %}
 <h1>Outreach Email for {{ website.url }}</h1>
-<form action="{{ url_for('approve_outreach', website_id=website.id) }}" method="post">
+<form action="{{ url_for('approve_general_outreach', website_id=website.id) }}" method="post">
     <div class="form-group">
         <label for="email_content">Email Content:</label>
         <textarea class="form-control" id="email_content" name="email_content" rows="10">{{ email_content }}</textarea>

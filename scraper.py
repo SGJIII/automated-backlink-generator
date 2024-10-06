@@ -125,24 +125,27 @@ def is_valid_name(name):
     
     return True
 
-def scrape_websites_for_backlinks(keyword):
-    results = search_google(keyword)
-    for result in results:
-        website_url = result['link']
-        website = Website.query.filter_by(url=website_url).first()
-        if not website:
-            author_name = scrape_author(website_url)
-            author_email = find_email(author_name, website_url) if author_name else None
-            new_website = Website(
-                url=website_url,
-                domain_authority=None,
-                author_name=author_name,
-                author_email=author_email,
-                status='email_found' if author_email else ('author_found' if author_name else 'pending')
-            )
-            db.session.add(new_website)
-    db.session.commit()
-    print("Scraping completed and websites added to database.")
+def scrape_websites_for_backlinks(keyword, fetch_more=False):
+    base_url = "https://serpapi.com/search.json"
+    params = {
+        "q": keyword,
+        "api_key": SERPAPI_API_KEY,
+        "num": 10
+    }
+    
+    if fetch_more:
+        params["start"] = 11  # Start from the 11th result for fetching more
+
+    try:
+        response = requests.get(base_url, params=params)
+        response.raise_for_status()
+        data = response.json()
+        
+        organic_results = data.get('organic_results', [])
+        return [result['link'] for result in organic_results]
+    except Exception as e:
+        print(f"Error fetching search results: {str(e)}")
+        return []
 
 def scrape_author_text(url):
     try:
@@ -209,17 +212,16 @@ def extract_text_from_pdf(content):
         print(f"Error extracting text from PDF: {str(e)}")
         return ""
 
-def extract_authors_with_gpt(author_text):
+def extract_authors_with_gpt(text):
     try:
-        print(f"Sending request to OpenAI API with text: {author_text[:500]}...")  # Increased to 500 characters
         response = client.chat.completions.create(
-            model="gpt-3.5-turbo-0125",
+            model="gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": "You are a helpful assistant that extracts author names from text. Your task is to identify and list all potential author names from the given text, including writers, contributors, editors, and reviewers."},
-                {"role": "user", "content": f"Extract all full names of individuals who are likely to be authors, contributors, editors, or reviewers of the content. Return the names as a comma-separated list, or 'None found' if no names are present. Include both main authors and any mentioned reviewers or editors. Do not include titles, dates, or any other text. Limit the response to a maximum of 10 names:\n\n{author_text}"}
+                {"role": "user", "content": f"Extract all full names of individuals who are likely to be authors, contributors, editors, or reviewers of the content. Return the names as a comma-separated list, or 'None found' if no names are present. Include both main authors and any mentioned reviewers or contributors.Do not include titles, dates, or any other text. Limit the response to a maximum of 10 names"},
+                {"role": "user", "content": text}
             ]
         )
-        print(f"Received response from OpenAI API: {response}")
         names = response.choices[0].message.content.strip()
         print(f"Extracted names: {names}")
         
