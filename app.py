@@ -208,8 +208,15 @@ def email_settings():
         return redirect(url_for('auth.login'))
     
     if request.method == 'POST':
-        # Handle form submission (update email settings)
-        # ... (implement the logic to save email settings)
+        user.email_provider = request.form['email_provider']
+        user.email_settings = {
+            'smtp_server': request.form['smtp_server'],
+            'smtp_port': int(request.form['smtp_port']),
+            'smtp_username': request.form['smtp_username'],
+            'smtp_password': request.form['smtp_password']
+        }
+        db.session.commit()
+        print(f"Updated email settings: {user.email_settings}")  # Add this line
         flash('Email settings updated successfully', 'success')
         return redirect(url_for('dashboard'))
     

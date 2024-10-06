@@ -25,6 +25,7 @@ def send_via_mailgun(from_email, to_email, subject, body, api_key, domain):
 
 def send_via_smtp(from_email, to_email, subject, body, smtp_server, smtp_port, smtp_username, smtp_password):
     try:
+        print(f"SMTP settings: server={smtp_server}, port={smtp_port}, username={smtp_username}")
         msg = MIMEMultipart()
         msg['From'] = from_email
         msg['To'] = to_email
@@ -32,8 +33,11 @@ def send_via_smtp(from_email, to_email, subject, body, smtp_server, smtp_port, s
         msg.attach(MIMEText(body, 'plain'))
 
         server = smtplib.SMTP(smtp_server, smtp_port)
+        server.set_debuglevel(1)  # Enable debug output
         server.starttls()
+        print("Attempting to log in...")
         server.login(smtp_username, smtp_password)
+        print("Login successful")
         server.send_message(msg)
         server.quit()
 
