@@ -74,16 +74,6 @@ def start_scraper():
         scrape_websites_for_backlinks('crypto currency IRA')
     return jsonify({"message": "Scraping started!"})
 
-@app.route('/campaign/<int:campaign_id>/websites')
-def show_websites(campaign_id):
-    if 'email' not in session:
-        return redirect(url_for('login'))
-    
-    campaign = Campaign.query.get_or_404(campaign_id)
-    websites = Website.query.filter(Website.campaigns.any(id=campaign_id)).all()
-    
-    return render_template('campaign_websites.html', campaign=campaign, websites=websites)
-
 # Add a new route for manually triggering the scraper
 @app.route('/scrape_websites')
 def scrape_websites():
@@ -153,6 +143,8 @@ def approve_general_outreach(website_id):
         user = User.query.filter_by(email=session['email']).first()
         
         # Send the email
+        print(f"Attempting to send email to {website.author_email}")
+        print(f"User ID: {user.id}, Email: {user.email}")  # Add this line
         success = send_email(user.id, website.author_email, "Backlink Request", email_content)
         
         if success:
@@ -170,7 +162,8 @@ def approve_general_outreach(website_id):
             
             flash('Email sent successfully!', 'success')
         else:
-            flash('Failed to send email. Please check your email settings.', 'error')
+            print("Email sending failed")  # Add this line
+            flash('Failed to send email. Please check your email settings and logs.', 'error')
         
         return redirect(url_for('dashboard'))
     flash('Website not found.', 'error')
@@ -265,11 +258,6 @@ def new_campaign():
     
     return render_template('new_campaign.html')
 
-@app.route('/campaign/<int:campaign_id>/websites')
-def view_campaign_websites(campaign_id):
-    campaign = Campaign.query.get_or_404(campaign_id)
-    return render_template('campaign_websites.html', campaign=campaign)
-
 @app.route('/campaign/<int:campaign_id>/analyze', methods=['POST'])
 def analyze_campaign(campaign_id):
     campaign = Campaign.query.get_or_404(campaign_id)
@@ -292,6 +280,11 @@ def fetch_more_websites(campaign_id):
 def begin_outreach(campaign_id, website_id):
     campaign = Campaign.query.get_or_404(campaign_id)
     website = Website.query.get_or_404(website_id)
+    
+    if not website:
+        flash('Invalid website selected.', 'error')
+        return redirect(url_for('campaign_websites', campaign_id=campaign_id))
+    
     email_content = generate_outreach_email_content(website, campaign.user_id, campaign.user.name, campaign.user.company, campaign.user.company_profile, campaign.target_url)
     return render_template('outreach_email.html', campaign=campaign, website=website, email_content=email_content)
 

@@ -3,81 +3,91 @@
 {% block title %}Campaign Websites{% endblock %}
 
 {% block content %}
-<h1>{{ campaign.name }} - Websites</h1>
-<button id="start-analysis" class="btn btn-primary mb-3">Start Analysis</button>
-<table class="table table-bordered">
+<h1>Websites for Campaign: {{ campaign.name }}</h1>
+
+<table id="websitesTable">
     <thead>
         <tr>
             <th>URL</th>
             <th>Domain Authority</th>
+            <th>Page Authority</th>
             <th>Author Name</th>
             <th>Author Email</th>
             <th>Status</th>
             <th>Actions</th>
         </tr>
     </thead>
-    <tbody id="websites-table-body">
-        {% for website in campaign.websites %}
+    <tbody>
+    {% for website in websites %}
         <tr>
             <td>{{ website.url }}</td>
-            <td>{{ website.domain_authority or 'N/A' }}</td>
-            <td>{{ website.author_name or 'Not found' }}</td>
-            <td>{{ website.author_email or 'Not found' }}</td>
+            <td>{{ website.domain_authority }}</td>
+            <td>{{ website.page_authority }}</td>
+            <td>{{ website.author_name }}</td>
+            <td>{{ website.author_email }}</td>
             <td>{{ website.status }}</td>
             <td>
                 {% if website.status == 'email_found' %}
-                <a href="{{ url_for('begin_outreach', campaign_id=campaign.id, website_id=0) }}".replace("/0", "/${website.id}") class="btn btn-sm btn-primary">Begin Outreach</a>
+                    <a href="{{ url_for('begin_outreach', campaign_id=campaign.id, website_id=website.id) }}">Begin Outreach</a>
                 {% endif %}
             </td>
         </tr>
-        {% endfor %}
+    {% endfor %}
     </tbody>
 </table>
-<button id="fetch-more" class="btn btn-secondary">Fetch More Websites</button>
+
+<button id="analyzeWebsites">Analyze Websites</button>
+<button id="fetchMoreWebsites">Fetch More Websites</button>
+
 {% endblock %}
 
 {% block scripts %}
 <script>
-    document.getElementById('start-analysis').addEventListener('click', function() {
-        fetch('{{ url_for("analyze_campaign", campaign_id=campaign.id) }}', {
-            method: 'POST'
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                alert('Analysis started successfully');
-            } else {
-                alert('Error: ' + data.message);
-            }
-        });
+document.getElementById('analyzeWebsites').addEventListener('click', function() {
+    fetch('/campaign/{{ campaign.id }}/analyze', {
+        method: 'POST',
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Analysis started successfully');
+            // You might want to refresh the page or update the table here
+        } else {
+            alert('Error: ' + data.message);
+        }
     });
+});
 
-    document.getElementById('fetch-more').addEventListener('click', function() {
-        fetch('{{ url_for("fetch_more_websites", campaign_id=campaign.id) }}', {
-            method: 'POST'
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                data.websites.forEach(website => {
-                    const row = `
-                    <tr>
-                        <td>${website.url}</td>
-                        <td>${website.domain_authority}</td>
-                        <td>${website.author_name}</td>
-                        <td>${website.author_email}</td>
-                        <td>${website.status}</td>
-                        <td>
-                            ${website.status === 'email_found' ? `<a href="{{ url_for('begin_outreach', campaign_id=campaign.id, website_id=0) }}".replace("/0", "/${website.id}") class="btn btn-sm btn-primary">Begin Outreach</a>` : ''}
-                        </td>
-                    </tr>
-                    `;
-                    document.getElementById('websites-table-body').insertAdjacentHTML('beforeend', row);
-                });
-            } else {
-                alert('Error: ' + data.message);
-            }
-        });
+document.getElementById('fetchMoreWebsites').addEventListener('click', function() {
+    fetch('/campaign/{{ campaign.id }}/fetch_more', {
+        method: 'POST',
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            updateTable(data.websites);
+        } else {
+            alert('Error: ' + data.message);
+        }
     });
+});
+
+function updateTable(websites) {
+    const tableBody = document.querySelector('#websitesTable tbody');
+    websites.forEach(website => {
+        const row = tableBody.insertRow();
+        row.innerHTML = `
+            <td>${website.url}</td>
+            <td>${website.domain_authority}</td>
+            <td>${website.page_authority}</td>
+            <td>${website.author_name}</td>
+            <td>${website.author_email}</td>
+            <td>${website.status}</td>
+            <td>
+                ${website.status === 'email_found' ? `<a href="/campaign/{{ campaign.id }}/begin_outreach/${website.id}">Begin Outreach</a>` : ''}
+            </td>
+        `;
+    });
+}
 </script>
 {% endblock %}
