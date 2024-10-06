@@ -27,17 +27,15 @@
             <td>{{ website.author_email }}</td>
             <td>{{ website.status }}</td>
             <td>
-                {% if website.status == 'email_found' %}
-                    <a href="{{ url_for('begin_outreach', campaign_id=campaign.id, website_id=website.id) }}">Begin Outreach</a>
-                {% endif %}
+                <a href="{{ url_for('begin_outreach', campaign_id=campaign.id, website_id=website.id) }}" class="btn btn-primary btn-sm">Begin Outreach</a>
             </td>
         </tr>
     {% endfor %}
     </tbody>
 </table>
 
-<button id="analyzeWebsites">Analyze Websites</button>
-<button id="fetchMoreWebsites">Fetch More Websites</button>
+<button id="analyzeWebsites" class="btn btn-secondary mt-3">Analyze Websites</button>
+<button id="fetchMoreWebsites" class="btn btn-secondary mt-3">Fetch More Websites</button>
 
 {% endblock %}
 
@@ -84,7 +82,7 @@ function updateTable(websites) {
             <td>${website.author_email}</td>
             <td>${website.status}</td>
             <td>
-                ${website.status === 'email_found' ? `<a href="/campaign/{{ campaign.id }}/begin_outreach/${website.id}">Begin Outreach</a>` : ''}
+                <a href="/campaign/{{ campaign.id }}/begin_outreach/${website.id}" class="btn btn-primary btn-sm">Begin Outreach</a>
             </td>
         `;
     });

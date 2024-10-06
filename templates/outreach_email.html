@@ -4,7 +4,11 @@
 
 {% block content %}
 <h1>Outreach Email for {{ website.url }}</h1>
-<form action="{{ url_for('approve_general_outreach', website_id=website.id) }}" method="post">
+<form action="{{ url_for('approve_campaign_outreach', campaign_id=campaign.id, website_id=website.id) }}" method="post">
+    <div class="form-group">
+        <label for="recipient_email">Recipient Email:</label>
+        <input type="email" class="form-control" id="recipient_email" name="recipient_email" value="{{ website.author_email }}" required>
+    </div>
     <div class="form-group">
         <label for="email_content">Email Content:</label>
         <textarea class="form-control" id="email_content" name="email_content" rows="10">{{ email_content }}</textarea>
@@ -19,4 +23,19 @@
     </div>
     <button type="submit" class="btn btn-primary mt-3">Approve and Send</button>
 </form>
+<button id="regenerate-email" class="btn btn-secondary mt-3">Regenerate Email</button>
+
+<script>
+document.getElementById('regenerate-email').addEventListener('click', function() {
+    fetch('{{ url_for("regenerate_email", campaign_id=campaign.id, website_id=website.id) }}', {
+        method: 'POST'
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            document.getElementById('email_content').value = data.email_content;
+        }
+    });
+});
+</script>
 {% endblock %}

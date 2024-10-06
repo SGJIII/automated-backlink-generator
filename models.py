@@ -55,6 +55,7 @@ class OutreachAttempt(db.Model):
     last_contact_date = db.Column(db.DateTime, default=datetime.utcnow)
     automated_followup = db.Column(db.Boolean, default=False)
     automated_reply = db.Column(db.Boolean, default=False)
+    cached_email_content = db.Column(db.Text)  # Add this line
 
 # Association table for many-to-many relationship between Campaign and Website
 campaign_website = db.Table('campaign_website',

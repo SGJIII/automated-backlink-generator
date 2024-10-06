@@ -27,9 +27,7 @@
             <td>{{ website.author_email if website.author_email else 'N/A' }}</td>
             <td>{{ website.status }}</td>
             <td>
-                {% if website.status == 'email_found' %}
-                    <a href="{{ url_for('start_outreach', website_id=website.id) }}" class="btn btn-primary btn-sm">Start Outreach</a>
-                {% endif %}
+                <a href="{{ url_for('begin_outreach', campaign_id=campaign.id, website_id=website.id) }}" class="btn btn-primary btn-sm">Begin Outreach</a>
             </td>
         </tr>
         {% endfor %}

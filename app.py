@@ -292,19 +292,29 @@ def begin_outreach(campaign_id, website_id):
         flash('Invalid website selected.', 'error')
         return redirect(url_for('campaign_websites', campaign_id=campaign_id))
     
+    # Create a new OutreachAttempt
+    outreach_attempt = OutreachAttempt(campaign_id=campaign_id, website_id=website_id)
+    db.session.add(outreach_attempt)
+    db.session.commit()
+    
     email_content = generate_outreach_email_content(website, campaign.user_id, campaign.user.name, campaign.user.company, campaign.user.company_profile, campaign.target_url)
-    return render_template('outreach_email.html', campaign=campaign, website=website, email_content=email_content)
+    
+    outreach_attempt.cached_email_content = email_content
+    db.session.commit()
+    
+    return render_template('outreach_email.html', campaign=campaign, website=website, email_content=email_content, outreach_attempt=outreach_attempt)
 
 @app.route('/campaign/<int:campaign_id>/approve_outreach/<int:website_id>', methods=['POST'])
 def approve_campaign_outreach(campaign_id, website_id):
     campaign = Campaign.query.get_or_404(campaign_id)
     website = Website.query.get_or_404(website_id)
     email_content = request.form['email_content']
+    recipient_email = request.form['recipient_email']  # Get the potentially modified email
     automated_followup = 'automated_followup' in request.form
     automated_reply = 'automated_reply' in request.form
     
     # Send email
-    success = send_email(campaign.user_id, website.author_email, "Outreach Email", email_content)
+    success = send_email(campaign.user_id, recipient_email, "Outreach Email", email_content)
     
     if success:
         outreach_attempt = OutreachAttempt(
@@ -403,7 +413,7 @@ def campaign_outreach(campaign_id):
     
     campaign = Campaign.query.get_or_404(campaign_id)
     outreach_attempts = OutreachAttempt.query.join(Website).filter(Website.campaigns.any(id=campaign_id)).all()
-    return render_template('campaign_outreach.html', campaign=campaign, outreach_attempts=outreach_attempts)
+    return render_template('campaign_sequences.html', campaign=campaign, sequences=outreach_attempts)
 
 @app.route('/campaign/<int:campaign_id>/sequences')
 def campaign_sequences(campaign_id):
@@ -433,6 +443,20 @@ def update_sequence(sequence_id):
     sequence.automated_reply = 'automated_reply' in request.form
     db.session.commit()
     return redirect(url_for('campaign_sequences', campaign_id=sequence.campaign_id))
+
+@app.route('/campaign/<int:campaign_id>/regenerate_email/<int:website_id>', methods=['POST'])
+def regenerate_email(campaign_id, website_id):
+    campaign = Campaign.query.get_or_404(campaign_id)
+    website = Website.query.get_or_404(website_id)
+    
+    email_content = generate_outreach_email_content(website, campaign.user_id, campaign.user.name, campaign.user.company, campaign.user.company_profile, campaign.target_url)
+    
+    outreach_attempt = OutreachAttempt.query.filter_by(campaign_id=campaign_id, website_id=website_id).first()
+    if outreach_attempt:
+        outreach_attempt.cached_email_content = email_content
+        db.session.commit()
+    
+    return jsonify({'success': True, 'email_content': email_content})
 
 @app.before_request
 def before_request():
