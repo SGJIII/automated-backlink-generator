@@ -10,9 +10,11 @@ def generate_outreach_email_content(website, user_id, sender_name, company_name,
         print(f"User with id {user_id} not found")
         return None
 
+    recipient_first_name = author_name.split()[0]
+
     prompt = f"""
     Create an {'follow-up ' if is_followup else ''}outreach email for the website {website.url}.
-    Recipient Name: {author_name}
+    Recipient Name: {recipient_first_name}
     Sender Name: {sender_name}
     Sender Email: {user.email}
     Company Name: {company_name}
