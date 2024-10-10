@@ -4,7 +4,7 @@ from models import Website, User
 
 anthropic = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
-def generate_outreach_email_content(website, user_id, sender_name, company_name, company_profile, article_url, is_followup=False):
+def generate_outreach_email_content(website, user_id, sender_name, company_name, company_profile, article_url, author_name, is_followup=False):
     user = User.query.get(user_id)
     if not user:
         print(f"User with id {user_id} not found")
@@ -12,8 +12,7 @@ def generate_outreach_email_content(website, user_id, sender_name, company_name,
 
     prompt = f"""
     Create an {'follow-up ' if is_followup else ''}outreach email for the website {website.url}.
-    Recipient Name: {website.author_name.split()[0]}
-    Recipient Email: {website.author_email}
+    Recipient Name: {author_name}
     Sender Name: {sender_name}
     Sender Email: {user.email}
     Company Name: {company_name}
@@ -34,7 +33,7 @@ def generate_outreach_email_content(website, user_id, sender_name, company_name,
     5. Offer to provide any additional information if needed.
     6. Thank them for their time and consideration.
     """
-    
+
     try:
         response = anthropic.messages.create(
             model="claude-3-opus-20240229",
@@ -47,10 +46,10 @@ def generate_outreach_email_content(website, user_id, sender_name, company_name,
         return response.content[0].text.strip()
     except Exception as e:
         print(f"Error generating email with Anthropic API: {str(e)}")
-        return generate_fallback_email(website, sender_name, company_name, company_profile, article_url, is_followup)
+        return generate_fallback_email(website, sender_name, company_name, company_profile, article_url, author_name, is_followup)
 
-def generate_fallback_email(website, sender_name, company_name, company_profile, article_url, is_followup=False):
-    recipient_first_name = website.author_name.split()[0]
+def generate_fallback_email(website, sender_name, company_name, company_profile, article_url, author_name, is_followup=False):
+    recipient_first_name = author_name.split()[0]
     followup_intro = "I hope this email finds you well. I'm following up on my previous message regarding " if is_followup else ""
     
     return f"""

@@ -3,7 +3,7 @@ import os
 from flask import Flask, render_template, session, redirect, url_for, jsonify, request, flash  # Add this import
 from flask_migrate import Migrate
 from db import db  # Import db from db.py
-from models import Website, EmailLog, Content, User, Campaign, OutreachAttempt
+from models import Website, EmailLog, Content, User, Campaign, OutreachAttempt, Author
 from auth import auth_bp
 from analyzer import get_domain_authority, analyze_websites_for_campaign
 from scraper import scrape_websites_for_backlinks, scrape_author, scrape_author_text
@@ -287,53 +287,88 @@ def fetch_more_websites(campaign_id):
 def begin_outreach(campaign_id, website_id):
     campaign = Campaign.query.get_or_404(campaign_id)
     website = Website.query.get_or_404(website_id)
-    
-    if not website:
-        flash('Invalid website selected.', 'error')
+    authors = Author.query.filter_by(website_id=website_id).all()
+
+    if not authors:
+        # If no authors found, create a default one
+        default_author = Author(website_id=website_id, name="Default Author", email=website.author_email)
+        db.session.add(default_author)
+        db.session.commit()
+        authors = [default_author]
+
+    outreach_attempts = []
+    for author in authors:
+        attempt = OutreachAttempt.query.filter_by(campaign_id=campaign_id, website_id=website_id, author_id=author.id).first()
+        if not attempt:
+            attempt = OutreachAttempt(campaign_id=campaign_id, website_id=website_id, author_id=author.id)
+            db.session.add(attempt)
+            db.session.commit()
+
+        if not attempt.cached_email_content:
+            attempt.cached_email_content = generate_outreach_email_content(website, campaign.user_id, campaign.user.name, campaign.user.company, campaign.user.company_profile, campaign.target_url, author.name)
+            db.session.commit()
+
+        outreach_attempts.append(attempt)
+
+    if request.method == 'POST':
+        for attempt in outreach_attempts:
+            attempt.automated_followup = request.form.get(f'automated_followup_{attempt.id}') == 'on'
+            attempt.automated_reply = request.form.get(f'automated_reply_{attempt.id}') == 'on'
+            if request.form.get(f'send_email_{attempt.id}') == 'on':
+                # Send email logic here
+                attempt.status = 'sent'
+            db.session.add(attempt)
+        db.session.commit()
+        flash('Outreach emails processed successfully', 'success')
         return redirect(url_for('campaign_websites', campaign_id=campaign_id))
-    
-    # Create a new OutreachAttempt
-    outreach_attempt = OutreachAttempt(campaign_id=campaign_id, website_id=website_id)
-    db.session.add(outreach_attempt)
-    db.session.commit()
-    
-    email_content = generate_outreach_email_content(website, campaign.user_id, campaign.user.name, campaign.user.company, campaign.user.company_profile, campaign.target_url)
-    
-    outreach_attempt.cached_email_content = email_content
-    db.session.commit()
-    
-    return render_template('outreach_email.html', campaign=campaign, website=website, email_content=email_content, outreach_attempt=outreach_attempt)
+
+    return render_template('outreach_email.html', campaign=campaign, website=website, outreach_attempts=outreach_attempts)
 
 @app.route('/campaign/<int:campaign_id>/approve_outreach/<int:website_id>', methods=['POST'])
 def approve_campaign_outreach(campaign_id, website_id):
     campaign = Campaign.query.get_or_404(campaign_id)
     website = Website.query.get_or_404(website_id)
-    email_content = request.form['email_content']
-    recipient_email = request.form['recipient_email']  # Get the potentially modified email
-    automated_followup = 'automated_followup' in request.form
-    automated_reply = 'automated_reply' in request.form
+    
+    author_id = request.form.get('send_to_author')
+    if not author_id:
+        flash('No author selected for outreach', 'error')
+        return redirect(url_for('begin_outreach', campaign_id=campaign_id, website_id=website_id))
+    
+    author = Author.query.get_or_404(author_id)
+    email_content = request.form[f'email_content_{author_id}']
+    recipient_email = request.form[f'recipient_email_{author_id}']
+    automated_followup = f'automated_followup_{author_id}' in request.form
+    automated_reply = f'automated_reply_{author_id}' in request.form
     
     # Send email
     success = send_email(campaign.user_id, recipient_email, "Outreach Email", email_content)
     
     if success:
-        outreach_attempt = OutreachAttempt(
-            campaign_id=campaign.id, 
-            website_id=website.id, 
-            status='sent',
-            automated_followup=automated_followup,
-            automated_reply=automated_reply
-        )
-        db.session.add(outreach_attempt)
-        website.status = 'outreach_sent'
+        outreach_attempt = OutreachAttempt.query.filter_by(campaign_id=campaign_id, website_id=website_id, author_id=author_id).first()
+        if outreach_attempt:
+            outreach_attempt.status = 'sent'
+            outreach_attempt.automated_followup = automated_followup
+            outreach_attempt.automated_reply = automated_reply
+            outreach_attempt.cached_email_content = email_content
+        else:
+            outreach_attempt = OutreachAttempt(
+                campaign_id=campaign.id, 
+                website_id=website.id,
+                author_id=author.id,
+                status='sent',
+                automated_followup=automated_followup,
+                automated_reply=automated_reply,
+                cached_email_content=email_content
+            )
+            db.session.add(outreach_attempt)
         if automated_followup:
-            schedule_followup(website.id, campaign.user_id)
+            schedule_followup(website.id, campaign.user_id, author.id)
         db.session.commit()
-        flash('Outreach email sent successfully', 'success')
+        flash(f'Outreach email sent successfully to {author.name}', 'success')
     else:
-        flash('Failed to send outreach email', 'error')
+        flash(f'Failed to send outreach email to {author.name}', 'error')
     
-    return redirect(url_for('campaign_details', campaign_id=campaign.id))
+    return redirect(url_for('begin_outreach', campaign_id=campaign_id, website_id=website_id))
 
 @app.route('/campaign/<int:campaign_id>')
 def view_campaign_details(campaign_id):
@@ -448,15 +483,16 @@ def update_sequence(sequence_id):
 def regenerate_email(campaign_id, website_id):
     campaign = Campaign.query.get_or_404(campaign_id)
     website = Website.query.get_or_404(website_id)
+    authors = Author.query.filter_by(website_id=website_id).all()
     
-    email_content = generate_outreach_email_content(website, campaign.user_id, campaign.user.name, campaign.user.company, campaign.user.company_profile, campaign.target_url)
+    for author in authors:
+        outreach_attempt = OutreachAttempt.query.filter_by(campaign_id=campaign_id, website_id=website_id, author_id=author.id).first()
+        if outreach_attempt:
+            email_content = generate_outreach_email_content(website, campaign.user_id, campaign.user.name, campaign.user.company, campaign.user.company_profile, campaign.target_url, author.name)
+            outreach_attempt.cached_email_content = email_content
+            db.session.commit()
     
-    outreach_attempt = OutreachAttempt.query.filter_by(campaign_id=campaign_id, website_id=website_id).first()
-    if outreach_attempt:
-        outreach_attempt.cached_email_content = email_content
-        db.session.commit()
-    
-    return jsonify({'success': True, 'email_content': email_content})
+    return jsonify({'success': True})
 
 @app.before_request
 def before_request():

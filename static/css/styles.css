@@ -1,0 +1,25 @@
+.author-email-box {
+    border: 1px solid #ddd;
+    padding: 15px;
+    margin-bottom: 20px;
+    border-radius: 5px;
+}
+
+.author-email-box.sent {
+    opacity: 0.7;
+    background-color: #f0f0f0;
+}
+
+.author-email-box.sent input,
+.author-email-box.sent textarea {
+    background-color: #f0f0f0;
+    cursor: not-allowed;
+}
+
+.form-group {
+    margin-bottom: 15px;
+}
+
+.form-check {
+    margin-bottom: 10px;
+}

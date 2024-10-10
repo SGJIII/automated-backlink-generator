@@ -51,11 +51,19 @@ class OutreachAttempt(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     campaign_id = db.Column(db.Integer, db.ForeignKey('campaign.id'), nullable=False)
     website_id = db.Column(db.Integer, db.ForeignKey('website.id'), nullable=False)
+    author_id = db.Column(db.Integer, db.ForeignKey('author.id'), nullable=False)
     status = db.Column(db.String(50), default='pending')
     last_contact_date = db.Column(db.DateTime, default=datetime.utcnow)
     automated_followup = db.Column(db.Boolean, default=False)
     automated_reply = db.Column(db.Boolean, default=False)
-    cached_email_content = db.Column(db.Text)  # Add this line
+    cached_email_content = db.Column(db.Text)
+
+class Author(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    website_id = db.Column(db.Integer, db.ForeignKey('website.id'), nullable=False)
+    name = db.Column(db.String(200))
+    email = db.Column(db.String(200))
+    outreach_attempts = db.relationship('OutreachAttempt', backref='author', lazy=True)
 
 # Association table for many-to-many relationship between Campaign and Website
 campaign_website = db.Table('campaign_website',

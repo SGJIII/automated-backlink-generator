@@ -1,29 +1,44 @@
 {% extends "base.html" %}
 
-{% block title %}Outreach Email{% endblock %}
+{% block title %}Outreach Emails for {{ website.url }}{% endblock %}
 
 {% block content %}
-<h1>Outreach Email for {{ website.url }}</h1>
+<h1>Outreach Emails for {{ website.url }}</h1>
+{% for attempt in outreach_attempts %}
 <form action="{{ url_for('approve_campaign_outreach', campaign_id=campaign.id, website_id=website.id) }}" method="post">
-    <div class="form-group">
-        <label for="recipient_email">Recipient Email:</label>
-        <input type="email" class="form-control" id="recipient_email" name="recipient_email" value="{{ website.author_email }}" required>
+    <div class="author-email-box {% if attempt.status == 'sent' %}sent{% endif %}">
+        <h3>Email for {{ attempt.author.name }}</h3>
+        <div class="form-group">
+            <label for="recipient_email_{{ attempt.id }}">Recipient Email:</label>
+            <input type="email" class="form-control" id="recipient_email_{{ attempt.id }}" name="recipient_email_{{ attempt.id }}" value="{{ attempt.author.email }}" required {% if attempt.status == 'sent' %}disabled{% endif %}>
+        </div>
+        <div class="form-group">
+            <label for="email_content_{{ attempt.id }}">Email Content:</label>
+            <textarea class="form-control" id="email_content_{{ attempt.id }}" name="email_content_{{ attempt.id }}" rows="10" {% if attempt.status == 'sent' %}disabled{% endif %}>{{ attempt.cached_email_content }}</textarea>
+        </div>
+        <div class="form-check">
+            <input type="checkbox" class="form-check-input" id="automated_followup_{{ attempt.id }}" name="automated_followup_{{ attempt.id }}" {% if attempt.automated_followup %}checked{% endif %} {% if attempt.status == 'sent' %}disabled{% endif %}>
+            <label class="form-check-label" for="automated_followup_{{ attempt.id }}">Enable Automated Follow-up</label>
+        </div>
+        <div class="form-check">
+            <input type="checkbox" class="form-check-input" id="automated_reply_{{ attempt.id }}" name="automated_reply_{{ attempt.id }}" {% if attempt.automated_reply %}checked{% endif %} {% if attempt.status == 'sent' %}disabled{% endif %}>
+            <label class="form-check-label" for="automated_reply_{{ attempt.id }}">Enable Automated Reply</label>
+        </div>
+        {% if attempt.status != 'sent' %}
+        <div class="form-check">
+            <input type="checkbox" class="form-check-input" id="send_email_{{ attempt.id }}" name="send_email_{{ attempt.id }}">
+            <label class="form-check-label" for="send_email_{{ attempt.id }}">Approve and Send</label>
+        </div>
+        <input type="hidden" name="send_to_author" value="{{ attempt.author.id }}">
+        <button type="submit" class="btn btn-primary mt-3">Process Outreach</button>
+        {% else %}
+        <a href="{{ url_for('edit_sequence', sequence_id=attempt.id) }}" class="btn btn-secondary mt-2">Edit Sequence</a>
+        {% endif %}
     </div>
-    <div class="form-group">
-        <label for="email_content">Email Content:</label>
-        <textarea class="form-control" id="email_content" name="email_content" rows="10">{{ email_content }}</textarea>
-    </div>
-    <div class="form-check">
-        <input type="checkbox" class="form-check-input" id="automated_followup" name="automated_followup">
-        <label class="form-check-label" for="automated_followup">Enable Automated Follow-up</label>
-    </div>
-    <div class="form-check">
-        <input type="checkbox" class="form-check-input" id="automated_reply" name="automated_reply">
-        <label class="form-check-label" for="automated_reply">Enable Automated Reply</label>
-    </div>
-    <button type="submit" class="btn btn-primary mt-3">Approve and Send</button>
 </form>
-<button id="regenerate-email" class="btn btn-secondary mt-3">Regenerate Email</button>
+{% endfor %}
+
+<button id="regenerate-email" class="btn btn-secondary mt-3">Regenerate All Emails</button>
 
 <script>
 document.getElementById('regenerate-email').addEventListener('click', function() {
@@ -33,7 +48,7 @@ document.getElementById('regenerate-email').addEventListener('click', function()
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            document.getElementById('email_content').value = data.email_content;
+            location.reload();
         }
     });
 });
