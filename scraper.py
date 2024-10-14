@@ -237,3 +237,26 @@ def extract_authors_with_gpt(text):
         print(f"Error extracting authors with GPT: {str(e)}")
         print(f"Full traceback: {traceback.format_exc()}")
         return None
+
+def scrape_google_news(topic):
+    params = {
+        "q": topic,
+        "tbm": "nws",
+        "api_key": SERPAPI_API_KEY,
+        "engine": "google"
+    }
+    response = requests.get('https://serpapi.com/search', params=params)
+    results = response.json()
+    news_results = results.get('news_results', [])
+
+    websites = []
+    for result in news_results:
+        website = Website(
+            url=result['link'],
+            author_name=result.get('source', ''),
+            title=result.get('title', ''),
+            snippet=result.get('snippet', '')
+        )
+        websites.append(website)
+
+    return websites

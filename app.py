@@ -6,7 +6,7 @@ from db import db  # Import db from db.py
 from models import Website, EmailLog, Content, User, Campaign, OutreachAttempt, Author
 from auth import auth_bp
 from analyzer import get_domain_authority, analyze_websites_for_campaign
-from scraper import scrape_websites_for_backlinks, scrape_author, scrape_author_text
+from scraper import scrape_websites_for_backlinks, scrape_author, scrape_author_text, scrape_google_news
 import traceback  # Add this import
 from email_finder import find_email, process_email_finding  # Add this import
 from content_generator import generate_outreach_email_content
@@ -248,22 +248,31 @@ def user_settings():
 def new_campaign():
     if 'email' not in session:
         return redirect(url_for('auth.login'))
-    
-    user = User.query.filter_by(email=session['email']).first()
-    if not user:
-        return redirect(url_for('auth.login'))
-    
+
     if request.method == 'POST':
-        target_url = request.form['target_url']
-        keyword = request.form['keyword']
+        campaign_type = request.args.get('campaign_type')
         name = request.form['name']
-        campaign = Campaign(user_id=user.id, target_url=target_url, keyword=keyword, name=name)
+        user = User.query.filter_by(email=session['email']).first()
+
+        if campaign_type == 'seo':
+            target_url = request.form['target_url']
+            keyword = request.form['keyword']
+            campaign = Campaign(name=name, user_id=user.id, campaign_type='seo', target_url=target_url, keyword=keyword)
+        elif campaign_type == 'pr':
+            press_release = request.form['press_release']
+            topic = request.form['topic']
+            campaign = Campaign(name=name, user_id=user.id, campaign_type='pr', press_release=press_release, topic=topic)
+        else:
+            flash('Invalid campaign type', 'error')
+            return redirect(url_for('new_campaign'))
+
         db.session.add(campaign)
         db.session.commit()
+        flash('New campaign created successfully', 'success')
         
-        # Change this line
-        return redirect(url_for('campaign_websites_page', campaign_id=campaign.id))
-    
+        # Redirect to the campaign_websites page
+        return redirect(url_for('campaign_websites', campaign_id=campaign.id))
+
     return render_template('new_campaign.html')
 
 @app.route('/campaign/<int:campaign_id>/analyze', methods=['POST'])
@@ -519,21 +528,31 @@ def regenerate_email(campaign_id, website_id):
     return jsonify({'success': True})
 
 @app.route('/campaign/<int:campaign_id>/websites', methods=['GET', 'POST'])
-def get_campaign_websites(campaign_id):
-    if 'email' not in session:
-        return jsonify({"error": "Unauthorized", "redirect": url_for('auth.login')}), 401
-    
+def campaign_websites(campaign_id):
     try:
         campaign = Campaign.query.get_or_404(campaign_id)
         websites = Website.query.filter(Website.campaigns.any(id=campaign_id)).all()
+        
+        if not websites:
+            # If no websites are associated with the campaign, scrape them
+            if campaign.campaign_type == 'seo':
+                websites = scrape_websites_for_backlinks(campaign.keyword)
+            elif campaign.campaign_type == 'pr':
+                websites = scrape_google_news(campaign.topic)
+            
+            # Associate the scraped websites with the campaign
+            for website in websites:
+                campaign.websites.append(website)
+            db.session.commit()
+        
         websites_data = [{
-            'id': website.id,
+            'id': website.id if hasattr(website, 'id') else None,
             'url': website.url,
-            'domain_authority': website.domain_authority,
-            'page_authority': website.page_authority,
+            'domain_authority': website.domain_authority if hasattr(website, 'domain_authority') else None,
+            'page_authority': website.page_authority if hasattr(website, 'page_authority') else None,
             'author_name': website.author_name,
-            'author_email': website.author_email,
-            'status': website.status
+            'author_email': website.author_email if hasattr(website, 'author_email') else None,
+            'status': website.status if hasattr(website, 'status') else 'new'
         } for website in websites]
         
         if request.method == 'GET':
@@ -541,8 +560,8 @@ def get_campaign_websites(campaign_id):
         else:
             return jsonify({"websites": websites_data})
     except Exception as e:
-        app.logger.error(f"Error in get_campaign_websites: {str(e)}")
-        app.logger.error(traceback.format_exc())  # Log the full traceback
+        app.logger.error(f"Error in campaign_websites: {str(e)}")
+        app.logger.error(traceback.format_exc())
         return jsonify({"error": "Server error", "message": str(e)}), 500
 
 @app.errorhandler(404)
