@@ -5,6 +5,10 @@
 {% block content %}
 <h1>Websites for Campaign: {{ campaign.name }}</h1>
 
+<div id="loadingMessage" style="display: none;">
+    Loading websites... Please wait.
+</div>
+
 <table id="websitesTable">
     <thead>
         <tr>
@@ -18,7 +22,7 @@
         </tr>
     </thead>
     <tbody>
-    {% for website in websites %}
+        {% for website in websites %}
         <tr>
             <td>{{ website.url }}</td>
             <td>{{ website.domain_authority }}</td>
@@ -30,7 +34,7 @@
                 <a href="{{ url_for('begin_outreach', campaign_id=campaign.id, website_id=website.id) }}" class="btn btn-primary btn-sm">Begin Outreach</a>
             </td>
         </tr>
-    {% endfor %}
+        {% endfor %}
     </tbody>
 </table>
 
@@ -41,32 +45,68 @@
 
 {% block scripts %}
 <script>
+document.addEventListener('DOMContentLoaded', function() {
+    loadWebsites();
+});
+
+function loadWebsites() {
+    document.getElementById('loadingMessage').style.display = 'block';
+    document.getElementById('websitesTable').style.display = 'none';
+
+    fetch('/campaign/{{ campaign.id }}/websites', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        }
+    })
+    .then(response => {
+        if (!response.ok) {
+            return response.json().then(err => { throw err; });
+        }
+        return response.json();
+    })
+    .then(data => {
+        if (data.error) {
+            throw new Error(data.message || 'Unknown error occurred');
+        }
+        updateTable(data.websites);
+        document.getElementById('loadingMessage').style.display = 'none';
+        document.getElementById('websitesTable').style.display = 'table';
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        document.getElementById('loadingMessage').textContent = `Error loading websites: ${error.message}. Please try refreshing the page.`;
+        document.getElementById('websitesTable').style.display = 'none';
+    });
+}
+
 document.getElementById('analyzeWebsites').addEventListener('click', function() {
+    document.getElementById('loadingMessage').style.display = 'block';
+    document.getElementById('loadingMessage').textContent = 'Analyzing websites... This may take a few minutes.';
+    document.getElementById('websitesTable').style.display = 'none';
+
     fetch('/campaign/{{ campaign.id }}/analyze', {
         method: 'POST',
     })
     .then(response => response.json())
     .then(data => {
+        if (data.error && data.redirect) {
+            window.location.href = data.redirect;
+            return;
+        }
         if (data.success) {
-            alert('Analysis started successfully');
-            // You might want to refresh the page or update the table here
+            document.getElementById('loadingMessage').textContent = 'Analysis completed. Loading results...';
+            loadWebsites();  // Reload the websites after analysis
         } else {
             alert('Error: ' + data.message);
+            document.getElementById('loadingMessage').style.display = 'none';
+            document.getElementById('websitesTable').style.display = 'table';
         }
-    });
-});
-
-document.getElementById('fetchMoreWebsites').addEventListener('click', function() {
-    fetch('/campaign/{{ campaign.id }}/fetch_more', {
-        method: 'POST',
     })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            updateTable(data.websites);
-        } else {
-            alert('Error: ' + data.message);
-        }
+    .catch(error => {
+        console.error('Error:', error);
+        document.getElementById('loadingMessage').textContent = 'Error analyzing websites. Please try again.';
     });
 });
 
@@ -87,5 +127,19 @@ function updateTable(websites) {
         `;
     });
 }
+
+document.getElementById('fetchMoreWebsites').addEventListener('click', function() {
+    fetch('/campaign/{{ campaign.id }}/fetch_more', {
+        method: 'POST',
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            updateTable(data.websites);
+        } else {
+            alert('Error: ' + data.message);
+        }
+    });
+});
 </script>
 {% endblock %}

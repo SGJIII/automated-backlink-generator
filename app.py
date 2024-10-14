@@ -1,6 +1,6 @@
 from dotenv import load_dotenv
 import os
-from flask import Flask, render_template, session, redirect, url_for, jsonify, request, flash  # Add this import
+from flask import Flask, render_template, session, redirect, url_for, jsonify, request, flash, make_response  # Add this import
 from flask_migrate import Migrate
 from db import db  # Import db from db.py
 from models import Website, EmailLog, Content, User, Campaign, OutreachAttempt, Author
@@ -261,12 +261,16 @@ def new_campaign():
         db.session.add(campaign)
         db.session.commit()
         
-        return redirect(url_for('campaign_websites', campaign_id=campaign.id))
+        # Change this line
+        return redirect(url_for('campaign_websites_page', campaign_id=campaign.id))
     
     return render_template('new_campaign.html')
 
 @app.route('/campaign/<int:campaign_id>/analyze', methods=['POST'])
 def analyze_campaign(campaign_id):
+    if 'email' not in session:
+        return jsonify({"error": "Unauthorized", "redirect": url_for('auth.login')}), 401
+
     campaign = Campaign.query.get_or_404(campaign_id)
     try:
         analyze_websites_for_campaign(campaign.id)
@@ -430,8 +434,8 @@ def campaign_details(campaign_id):
     campaign = Campaign.query.get_or_404(campaign_id)
     return render_template('campaign_details.html', campaign=campaign)
 
-@app.route('/campaign/<int:campaign_id>/websites')
-def campaign_websites(campaign_id):
+@app.route('/campaign/<int:campaign_id>/websites_page')
+def campaign_websites_page(campaign_id):
     if 'email' not in session:
         return redirect(url_for('auth.login'))
     
@@ -513,6 +517,50 @@ def regenerate_email(campaign_id, website_id):
         print(f"Author: {author.name}, Email: {author.email}")
 
     return jsonify({'success': True})
+
+@app.route('/campaign/<int:campaign_id>/websites', methods=['GET', 'POST'])
+def get_campaign_websites(campaign_id):
+    if 'email' not in session:
+        return jsonify({"error": "Unauthorized", "redirect": url_for('auth.login')}), 401
+    
+    try:
+        campaign = Campaign.query.get_or_404(campaign_id)
+        websites = Website.query.filter(Website.campaigns.any(id=campaign_id)).all()
+        websites_data = [{
+            'id': website.id,
+            'url': website.url,
+            'domain_authority': website.domain_authority,
+            'page_authority': website.page_authority,
+            'author_name': website.author_name,
+            'author_email': website.author_email,
+            'status': website.status
+        } for website in websites]
+        
+        if request.method == 'GET':
+            return render_template('campaign_websites.html', campaign=campaign, websites=websites)
+        else:
+            return jsonify({"websites": websites_data})
+    except Exception as e:
+        app.logger.error(f"Error in get_campaign_websites: {str(e)}")
+        app.logger.error(traceback.format_exc())  # Log the full traceback
+        return jsonify({"error": "Server error", "message": str(e)}), 500
+
+@app.errorhandler(404)
+def not_found_error(error):
+    return jsonify({"error": "Not found"}), 404
+
+@app.errorhandler(500)
+def internal_error(error):
+    app.logger.error(f"Server Error: {str(error)}")
+    app.logger.error(traceback.format_exc())  # Log the full traceback
+    return jsonify({"error": "Server error"}), 500
+
+# Add this new error handler
+@app.errorhandler(Exception)
+def handle_exception(e):
+    app.logger.error(f"Unhandled Exception: {str(e)}")
+    app.logger.error(traceback.format_exc())  # Log the full traceback
+    return jsonify({"error": "Server error", "message": str(e)}), 500
 
 @app.before_request
 def before_request():
