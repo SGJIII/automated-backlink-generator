@@ -3,7 +3,7 @@
 {% block title %}Campaign Websites{% endblock %}
 
 {% block content %}
-<h1>Websites for Campaign: {{ campaign.name }}</h1>
+<h1>Websites for Campaign: {{ campaign.name }} ({{ campaign.campaign_type.upper() }})</h1>
 
 <div id="loadingMessage" style="display: none;">
     Loading websites... Please wait.
@@ -38,7 +38,6 @@
     </tbody>
 </table>
 
-<button id="analyzeWebsites" class="btn btn-secondary mt-3">Analyze Websites</button>
 <button id="fetchMoreWebsites" class="btn btn-secondary mt-3">Fetch More Websites</button>
 
 {% endblock %}

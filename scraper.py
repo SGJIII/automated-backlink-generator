@@ -241,9 +241,8 @@ def extract_authors_with_gpt(text):
 def scrape_google_news(topic):
     params = {
         "q": topic,
-        "tbm": "nws",
         "api_key": SERPAPI_API_KEY,
-        "engine": "google"
+        "engine": "google_news"
     }
     response = requests.get('https://serpapi.com/search', params=params)
     results = response.json()
@@ -253,9 +252,9 @@ def scrape_google_news(topic):
     for result in news_results:
         website = Website(
             url=result['link'],
-            author_name=result.get('source', ''),
             title=result.get('title', ''),
-            snippet=result.get('snippet', '')
+            snippet=result.get('snippet', ''),
+            status='pending'
         )
         websites.append(website)
 

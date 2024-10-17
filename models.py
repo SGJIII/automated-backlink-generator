@@ -12,13 +12,14 @@ class Website(db.Model):
     url = db.Column(db.String(500), unique=True, nullable=False)
     domain_authority = db.Column(db.Float)
     page_authority = db.Column(db.Float)
-    author_name = db.Column(db.String(200))
+    author_name = db.Column(db.Text)  # Changed from String(200) to Text
     author_email = db.Column(db.String(200))
     status = db.Column(db.String(50), default='pending')
     automated_reply_enabled = db.Column(db.Boolean, default=False)
     title = db.Column(db.String(500))  # Add this line
     snippet = db.Column(db.Text)  # Add this line
     outreach_attempts = db.relationship('OutreachAttempt', backref='website', lazy=True)
+    source = db.Column(db.String(200))  # Add this line
 
 class EmailLog(db.Model):
     id = db.Column(db.Integer, primary_key=True)
