@@ -4,9 +4,10 @@
 
 {% block content %}
 <h1>Outreach Emails for {{ website.url }}</h1>
-<p>Debug: Number of outreach attempts: {{ outreach_attempts|length }}</p>
+
+<p>Campaign Type: {{ campaign.campaign_type|upper }}</p>
+
 {% for attempt in outreach_attempts %}
-<p>Debug: Attempt for {{ attempt.author.name }}</p>
 <form action="{{ url_for('approve_campaign_outreach', campaign_id=campaign.id, website_id=website.id) }}" method="post">
     <div class="author-email-box {% if attempt.status == 'sent' %}sent{% endif %}">
         <h3>Email for {{ attempt.author.name }}</h3>

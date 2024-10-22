@@ -9,7 +9,7 @@ from analyzer import get_domain_authority, analyze_websites_for_campaign
 from scraper import scrape_websites_for_backlinks, scrape_author, scrape_author_text
 import traceback  # Add this import
 from email_finder import find_email, process_email_finding  # Add this import
-from content_generator import generate_outreach_email_content
+from content_generator import generate_outreach_email_content, generate_pr_outreach_email_content
 from email_sender import send_email
 from automated_followup import schedule_followup
 from automated_reply import process_reply
@@ -248,22 +248,46 @@ def user_settings():
 def new_campaign():
     if 'email' not in session:
         return redirect(url_for('auth.login'))
-    
+
     user = User.query.filter_by(email=session['email']).first()
     if not user:
         return redirect(url_for('auth.login'))
-    
+
     if request.method == 'POST':
-        target_url = request.form['target_url']
-        keyword = request.form['keyword']
-        name = request.form['name']
-        campaign = Campaign(user_id=user.id, target_url=target_url, keyword=keyword, name=name)
+        campaign_type = request.form.get('campaign_type')
+        name = request.form.get('name')
+
+        if campaign_type == 'seo':
+            target_url = request.form.get('target_url')
+            keyword = request.form.get('keyword')
+            campaign = Campaign(
+                user_id=user.id,
+                campaign_type='seo',
+                name=name,
+                target_url=target_url,
+                keyword=keyword
+            )
+        elif campaign_type == 'pr':
+            topic = request.form.get('topic')
+            press_release_url = request.form.get('press_release_url')
+            press_release_content = request.form.get('press_release_content')
+            campaign = Campaign(
+                user_id=user.id,
+                campaign_type='pr',
+                name=name,
+                topic=topic,
+                press_release_url=press_release_url,
+                press_release_content=press_release_content
+            )
+        else:
+            flash('Invalid campaign type.', 'error')
+            return redirect(url_for('new_campaign'))
+
         db.session.add(campaign)
         db.session.commit()
-        
-        # Change this line
+
         return redirect(url_for('campaign_websites_page', campaign_id=campaign.id))
-    
+
     return render_template('new_campaign.html')
 
 @app.route('/campaign/<int:campaign_id>/analyze', methods=['POST'])
@@ -273,8 +297,8 @@ def analyze_campaign(campaign_id):
 
     campaign = Campaign.query.get_or_404(campaign_id)
     try:
-        analyze_websites_for_campaign(campaign.id)
-        return jsonify({'success': True, 'message': 'Analysis started successfully'})
+        new_websites = analyze_websites_for_campaign(campaign.id)
+        return jsonify({'success': True, 'message': 'Analysis completed successfully', 'websites': [website.to_dict() for website in new_websites]})
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)})
 
@@ -287,7 +311,7 @@ def fetch_more_websites(campaign_id):
     except Exception as e:
         return jsonify({'success': False, 'message': str(e)})
 
-@app.route('/campaign/<int:campaign_id>/begin_outreach/<int:website_id>', methods=['GET'])
+@app.route('/campaign/<int:campaign_id>/begin_outreach/<int:website_id>')
 def begin_outreach(campaign_id, website_id):
     campaign = Campaign.query.get_or_404(campaign_id)
     website = Website.query.get_or_404(website_id)
@@ -316,14 +340,18 @@ def begin_outreach(campaign_id, website_id):
             db.session.commit()
 
         if not attempt.cached_email_content:
-            attempt.cached_email_content = generate_outreach_email_content(website, campaign.user_id, campaign.user.name, campaign.user.company, campaign.user.company_profile, campaign.target_url, author.name)
+            if campaign.campaign_type == 'seo':
+                attempt.cached_email_content = generate_outreach_email_content(
+                    website, campaign.user_id, campaign.user.name, campaign.user.company, campaign.user.company_profile, campaign.target_url, author.name)
+            elif campaign.campaign_type == 'pr':
+                attempt.cached_email_content = generate_pr_outreach_email_content(
+                    website, campaign.user, campaign, author.name)
+            else:
+                flash('Invalid campaign type.', 'error')
+                return redirect(url_for('campaign_details', campaign_id=campaign_id))
             db.session.commit()
 
         outreach_attempts.append(attempt)
-
-    print(f"Number of authors found: {len(authors)}")
-    for author in authors:
-        print(f"Author: {author.name}, Email: {author.email}")
 
     return render_template('outreach_email.html', campaign=campaign, website=website, outreach_attempts=outreach_attempts)
 

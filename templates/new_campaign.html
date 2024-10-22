@@ -4,19 +4,58 @@
 
 {% block content %}
 <h1>Start New Campaign</h1>
-<form method="POST">
-    <div class="form-group">
-        <label for="name">Campaign Name</label>
-        <input type="text" class="form-control" id="name" name="name" required>
-    </div>
-    <div class="form-group">
+
+<ul class="nav nav-tabs" id="campaignTabs" role="tablist">
+  <li class="nav-item">
+    <a class="nav-link active" id="seo-tab" data-toggle="tab" href="#seo" role="tab">SEO</a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link" id="pr-tab" data-toggle="tab" href="#pr" role="tab">PR</a>
+  </li>
+</ul>
+
+<div class="tab-content" id="campaignTabsContent">
+  <div class="tab-pane fade show active" id="seo" role="tabpanel">
+    <form method="POST" action="{{ url_for('new_campaign') }}">
+      <input type="hidden" name="campaign_type" value="seo">
+      <!-- Existing SEO fields -->
+      <div class="form-group">
+        <label for="seo_name">Campaign Name</label>
+        <input type="text" class="form-control" id="seo_name" name="name" required>
+      </div>
+      <div class="form-group">
         <label for="target_url">Target URL for Backlinks</label>
         <input type="url" class="form-control" id="target_url" name="target_url" required>
-    </div>
-    <div class="form-group">
+      </div>
+      <div class="form-group">
         <label for="keyword">Target Keyword</label>
         <input type="text" class="form-control" id="keyword" name="keyword" required>
-    </div>
-    <button type="submit" class="btn btn-primary">Create Campaign</button>
-</form>
+      </div>
+      <button type="submit" class="btn btn-primary">Create SEO Campaign</button>
+    </form>
+  </div>
+  
+  <div class="tab-pane fade" id="pr" role="tabpanel">
+    <form method="POST" action="{{ url_for('new_campaign') }}">
+      <input type="hidden" name="campaign_type" value="pr">
+      <div class="form-group">
+        <label for="pr_name">Campaign Name</label>
+        <input type="text" class="form-control" id="pr_name" name="name" required>
+      </div>
+      <div class="form-group">
+        <label for="press_release_url">Press Release URL</label>
+        <input type="url" class="form-control" id="press_release_url" name="press_release_url" required>
+      </div>
+      <div class="form-group">
+        <label for="press_release_content">Press Release (paste the content of your press release)</label>
+        <textarea class="form-control" id="press_release_content" name="press_release_content" rows="10" required></textarea>
+      </div>
+      <div class="form-group">
+        <label for="topic">Target Topic</label>
+        <input type="text" class="form-control" id="topic" name="topic" required>
+      </div>
+      <button type="submit" class="btn btn-primary">Create PR Campaign</button>
+    </form>
+  </div>
+</div>
 {% endblock %}

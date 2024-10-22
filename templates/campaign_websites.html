@@ -1,15 +1,16 @@
 {% extends "base.html" %}
 
-{% block title %}Campaign Websites{% endblock %}
+{% block title %}Campaign Websites - {{ campaign.name }}{% endblock %}
 
 {% block content %}
 <h1>Websites for Campaign: {{ campaign.name }}</h1>
+<p>Campaign Type: {{ campaign.campaign_type|upper }}</p>
 
 <div id="loadingMessage" style="display: none;">
     Loading websites... Please wait.
 </div>
 
-<table id="websitesTable">
+<table id="websitesTable" class="table">
     <thead>
         <tr>
             <th>URL</th>

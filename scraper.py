@@ -237,3 +237,27 @@ def extract_authors_with_gpt(text):
         print(f"Error extracting authors with GPT: {str(e)}")
         print(f"Full traceback: {traceback.format_exc()}")
         return None
+
+def search_google_news(query):
+    params = {
+        "q": query,
+        "tbm": "nws",
+        "api_key": SERPAPI_API_KEY,
+        "engine": "google",
+    }
+    response = requests.get('https://serpapi.com/search', params=params)
+    results = response.json()
+    return results.get('news_results', [])
+
+def scrape_websites_for_campaign(query, campaign_type='seo', fetch_more=False):
+    if campaign_type == 'seo':
+        return scrape_websites_for_backlinks(query, fetch_more)
+    elif campaign_type == 'pr':
+        return scrape_google_news_articles(query)
+    else:
+        return []
+
+def scrape_google_news_articles(topic):
+    news_results = search_google_news(topic)
+    article_urls = [result['link'] for result in news_results if 'link' in result]
+    return article_urls

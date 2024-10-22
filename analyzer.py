@@ -4,7 +4,7 @@ import requests
 import json
 import traceback
 from models import Campaign, Website, db
-from scraper import scrape_websites_for_backlinks, scrape_author
+from scraper import scrape_websites_for_backlinks, scrape_author, scrape_websites_for_campaign
 from email_finder import find_email
 
 load_dotenv()
@@ -51,11 +51,18 @@ def analyze_websites_for_campaign(campaign_id, fetch_more=False):
         print(f"Campaign with id {campaign_id} not found")
         return
 
-    keyword = campaign.keyword
-    scraped_websites = scrape_websites_for_backlinks(keyword, fetch_more)
+    if campaign.campaign_type == 'seo':
+        query = campaign.keyword
+    elif campaign.campaign_type == 'pr':
+        query = campaign.topic
+    else:
+        print(f"Unknown campaign type: {campaign.campaign_type}")
+        return
+
+    scraped_websites = scrape_websites_for_campaign(query, campaign.campaign_type, fetch_more)
     
     if not scraped_websites:
-        print(f"No websites found for keyword: {keyword}")
+        print(f"No websites found for query: {query}")
         return
 
     new_websites = []
@@ -64,21 +71,18 @@ def analyze_websites_for_campaign(campaign_id, fetch_more=False):
         if not website:
             author_name = scrape_author(website_url)
             author_email = find_email(author_name, website_url) if author_name else None
-            domain_authority, page_authority = get_domain_authority(website_url)
             website = Website(
                 url=website_url,
-                domain_authority=domain_authority,
-                page_authority=page_authority,
                 author_name=author_name,
                 author_email=author_email,
                 status='email_found' if author_email else ('author_found' if author_name else 'pending')
             )
             db.session.add(website)
             new_websites.append(website)
-        
+
         if website not in campaign.websites:
             campaign.websites.append(website)
-    
+
     db.session.commit()
     print(f"Website analysis completed for campaign {campaign_id}")
     return new_websites
@@ -127,3 +131,4 @@ if __name__ == "__main__":
     da, pa = get_domain_authority(test_url)
     print(f"Domain Authority for {test_url}: {da}")
     print(f"Page Authority for {test_url}: {pa}")
+

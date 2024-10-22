@@ -39,9 +39,15 @@ class User(db.Model):
 class Campaign(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    name = db.Column(db.String(100), nullable=False)  # Make sure this line is present
-    target_url = db.Column(db.String(500), nullable=False)
-    keyword = db.Column(db.String(100), nullable=False)
+    campaign_type = db.Column(db.String(50), nullable=False, default='seo')
+    name = db.Column(db.String(100), nullable=False)
+    # SEO Fields
+    target_url = db.Column(db.String(500), nullable=True)  # Change this line
+    keyword = db.Column(db.String(100), nullable=True)
+    # PR Fields
+    topic = db.Column(db.String(100), nullable=True)
+    press_release_url = db.Column(db.String(500), nullable=True)
+    press_release_content = db.Column(db.Text, nullable=True)
     status = db.Column(db.String(50), default='active')
     created_date = db.Column(db.DateTime, default=datetime.utcnow)
     websites = db.relationship('Website', secondary='campaign_website', back_populates='campaigns')
