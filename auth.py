@@ -5,6 +5,10 @@ from google.oauth2 import id_token
 import google.auth.transport.requests
 from pip._vendor import cachecontrol
 import requests
+from flask_login import login_user, logout_user, login_required, current_user
+from werkzeug.security import generate_password_hash, check_password_hash
+from flask_sqlalchemy import SQLAlchemy
+from models import User, db
 
 auth_bp = Blueprint('auth', __name__)
 
@@ -35,25 +39,44 @@ def login():
 
 @auth_bp.route('/auth/callback')
 def callback():
-    flow = Flow.from_client_config(
-        client_secrets_file,
-        scopes=['https://www.googleapis.com/auth/userinfo.email', 'openid'],
-        state=session['state'],
-        redirect_uri=url_for('auth.callback', _external=True)
-    )
-    flow.fetch_token(authorization_response=request.url)
-    credentials = flow.credentials
-    request_session = requests.session()
-    cached_session = cachecontrol.CacheControl(request_session)
-    token_request = google.auth.transport.requests.Request(session=cached_session)
-    id_info = id_token.verify_oauth2_token(
-        credentials._id_token,
-        token_request,
-        GOOGLE_CLIENT_ID
-    )
-    session['email'] = id_info.get('email')
-    print("Session set in callback:", session)  # Debug print
-    return redirect(url_for('dashboard'))
+    try:
+        flow = Flow.from_client_config(
+            client_secrets_file,
+            scopes=['https://www.googleapis.com/auth/userinfo.email', 'openid'],
+            state=session['state'],
+            redirect_uri=url_for('auth.callback', _external=True)
+        )
+        
+        flow.fetch_token(authorization_response=request.url)
+        credentials = flow.credentials
+        
+        request_session = requests.session()
+        cached_session = cachecontrol.CacheControl(request_session)
+        token_request = google.auth.transport.requests.Request(session=cached_session)
+        
+        id_info = id_token.verify_oauth2_token(
+            credentials._id_token,
+            token_request,
+            GOOGLE_CLIENT_ID
+        )
+        
+        session.clear()  # Clear any existing session data
+        session['email'] = id_info.get('email')
+        session['authenticated'] = True  # Add this line
+        
+        # Create or update user in database
+        user = User.query.filter_by(email=session['email']).first()
+        if not user:
+            user = User(email=session['email'])
+            db.session.add(user)
+            db.session.commit()
+            
+        return redirect(url_for('dashboard'))
+        
+    except Exception as e:
+        print(f"Error in callback: {str(e)}")
+        session.clear()
+        return redirect(url_for('index'))
 
 @auth_bp.route('/logout')
 def logout():

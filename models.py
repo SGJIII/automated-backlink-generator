@@ -1,5 +1,26 @@
 from db import db
 from datetime import datetime
+from sqlalchemy.ext.mutable import MutableDict
+from sqlalchemy.types import TypeDecorator, Text
+import json
+
+class JSONEncodedDict(TypeDecorator):
+    """Enables JSON storage by encoding and decoding JSON on the fly."""
+    impl = Text
+
+    def process_bind_param(self, value, dialect):
+        if value is not None:
+            value = json.dumps(value)
+        return value
+
+    def process_result_value(self, value, dialect):
+        if not value:
+            return {}
+        try:
+            return json.loads(value)
+        except json.JSONDecodeError:
+            # If the value is not valid JSON, return an empty dictionary
+            return {}
 
 class Website(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -62,7 +83,7 @@ class OutreachAttempt(db.Model):
     last_contact_date = db.Column(db.DateTime, default=datetime.utcnow)
     automated_followup = db.Column(db.Boolean, default=False)
     automated_reply = db.Column(db.Boolean, default=False)
-    cached_email_content = db.Column(db.Text)
+    cached_email_content = db.Column(MutableDict.as_mutable(JSONEncodedDict))
 
 class Author(db.Model):
     id = db.Column(db.Integer, primary_key=True)

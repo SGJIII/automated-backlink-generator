@@ -15,6 +15,7 @@ from automated_followup import schedule_followup
 from automated_reply import process_reply
 from flask_session import Session
 from sqlalchemy import func
+from decorators import login_required
 
 load_dotenv()
 # Initialize Flask app
@@ -44,20 +45,11 @@ def index():
     return render_template('index.html')
 
 @app.route('/dashboard')
+@login_required
 def dashboard():
-    # Check if the user is logged in by looking for email in session
-    if 'email' not in session:
-        return redirect(url_for('auth.login'))
-    
     user = User.query.filter_by(email=session['email']).first()
     if not user:
-        return redirect(url_for('auth.login'))
-    
-    # Check if user has completed their profile
-    if not user.name or not user.company or not user.company_profile:
-        flash('Please complete your profile before accessing the dashboard.', 'warning')
-        return redirect(url_for('user_settings'))
-    
+        return redirect(url_for('auth.logout'))
     return render_template('dashboard.html', user=user)
 
 # Function to inject Google Client ID into templates
@@ -365,21 +357,30 @@ def approve_campaign_outreach(campaign_id, website_id):
             author_id = key.split('_')[-1]
             if value == 'on':
                 author = Author.query.get_or_404(author_id)
-                email_content = request.form[f'email_content_{author_id}']
+                subject = request.form[f'email_subject_{author_id}']
+                body = request.form[f'email_content_{author_id}']
                 recipient_email = request.form[f'recipient_email_{author_id}']
                 automated_followup = f'automated_followup_{author_id}' in request.form
                 automated_reply = f'automated_reply_{author_id}' in request.form
                 
-                # Send email
-                success = send_email(campaign.user_id, recipient_email, "Outreach Email", email_content)
+                # Send email with separate subject and body
+                success = send_email(campaign.user_id, recipient_email, subject, body)
                 
                 if success:
-                    outreach_attempt = OutreachAttempt.query.filter_by(campaign_id=campaign_id, website_id=website_id, author_id=author_id).first()
+                    outreach_attempt = OutreachAttempt.query.filter_by(
+                        campaign_id=campaign_id, 
+                        website_id=website_id, 
+                        author_id=author_id
+                    ).first()
+                    
                     if outreach_attempt:
                         outreach_attempt.status = 'sent'
                         outreach_attempt.automated_followup = automated_followup
                         outreach_attempt.automated_reply = automated_reply
-                        outreach_attempt.cached_email_content = email_content
+                        outreach_attempt.cached_email_content = {
+                            'subject': subject,
+                            'body': body
+                        }
                     else:
                         outreach_attempt = OutreachAttempt(
                             campaign_id=campaign.id, 
@@ -388,9 +389,13 @@ def approve_campaign_outreach(campaign_id, website_id):
                             status='sent',
                             automated_followup=automated_followup,
                             automated_reply=automated_reply,
-                            cached_email_content=email_content
+                            cached_email_content={
+                                'subject': subject,
+                                'body': body
+                            }
                         )
                         db.session.add(outreach_attempt)
+                    
                     if automated_followup:
                         schedule_followup(website.id, campaign.user_id, author.id)
                     db.session.commit()
@@ -536,7 +541,17 @@ def regenerate_email(campaign_id, website_id):
             db.session.add(outreach_attempt)
             db.session.commit()
 
-        email_content = generate_outreach_email_content(website, campaign.user_id, campaign.user.name, campaign.user.company, campaign.user.company_profile, campaign.target_url, author.name)
+        # Generate email content based on campaign type
+        if campaign.campaign_type == 'seo':
+            email_content = generate_outreach_email_content(
+                website, campaign.user_id, campaign.user.name, campaign.user.company, campaign.user.company_profile, campaign.target_url, author.name)
+        elif campaign.campaign_type == 'pr':
+            email_content = generate_pr_outreach_email_content(
+                website, campaign.user, campaign, author.name)
+        else:
+            continue  # Invalid campaign type
+
+        # Assign the dictionary directly
         outreach_attempt.cached_email_content = email_content
         db.session.commit()
 
